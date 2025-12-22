@@ -3,7 +3,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::Data::Enum;
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields};
+use syn::{Data, DataStruct, DeriveInput, Fields, parse_macro_input};
 
 /// Derive-макрос, который генерирует методы для enum категории `TxType` и `TxStatus`, позволяющие
 /// динамически взаимодействовать с перечислениями, получать их текстовые представления.
@@ -104,7 +104,7 @@ pub fn derive_tx_display(input: TokenStream) -> TokenStream {
 }
 
 /// Derive-макрос, который собирает методы, позволяющие обрабатывать поля структур, для их
-/// отображения, а также использование в текстовых данных.
+/// отображения (`Display`), а также использование в текстовых данных.
 #[proc_macro_derive(YPBankDisplay)]
 pub fn derive_ypbank_display(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -130,6 +130,11 @@ pub fn derive_ypbank_display(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Литерные (utf-8) названия полей в UPPERCASE.
+    let liter_fields = field_pairs
+        .iter()
+        .map(|(_, _, uppercase)| syn::LitStr::new(uppercase, name.span()));
+
     // Display::fmt - просто перечисляем поля
     let display_fields = field_pairs.iter().map(|(ident, field_name, _)| {
         quote! {
@@ -143,6 +148,15 @@ pub fn derive_ypbank_display(input: TokenStream) -> TokenStream {
                 write!(f, "{} {{ ", stringify!(#name))?;
                 #(#display_fields)*
                 write!(f, "}}")
+            }
+        }
+
+        impl #name {
+            pub fn has_field_from_str(field: &str) -> bool {
+                matches!(
+                    field.to_uppercase().as_str(),
+                    #(#liter_fields)|*
+                )
             }
         }
     };

@@ -121,6 +121,7 @@ impl_try_from_ypbank_source!(YPBankCsvFormat);
 ///
 /// Наличие значения `MAGIC` в начале каждой записи позволяет читателю повторно
 /// синхронизироваться в случае потери границы записи или повреждения данных.
+#[derive(Debug, YPBankDisplay)]
 pub struct YPBankBinFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -177,6 +178,7 @@ impl TryFrom<YPBankBinFormat> for YPBankTransaction {
 /// STATUS: SUCCESS
 /// DESCRIPTION: "Terminal deposit"
 /// ```
+#[derive(Debug, YPBankDisplay)]
 pub struct YPBankTextFormat {
     pub tx_id: u64,
     pub tx_type: TxType,

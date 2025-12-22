@@ -20,6 +20,9 @@ pub enum ParseError {
         column: usize,
     },
 
+    /// Предоставленный комплект для парсинга пустой.
+    EmptyData,
+
     /// Ошибка, вызванная некорректным форматом файла. Ожидался, например, `txt`, получен `csv`.
     InvalidFormat {
         expected: String,
@@ -43,7 +46,17 @@ pub enum ParseError {
     // Неподдерживаемый формат парсинга.
     UnsupportedFormat {
         invalid_format: String,
-    },
+    }
+}
+
+impl From<std::io::Error> for ParseError {
+    fn from(value: IOError) -> Self {
+        let msg = value.to_string();
+        ParseError::IOError {
+            err_source: value,
+            description: msg,
+        }
+    }
 }
 
 impl Error for ParseError {
@@ -98,6 +111,9 @@ impl Display for ParseError {
                     "Запрошенный формат {} не поддерживается. См. документацию",
                     invalid_format
                 )
+            }
+            ParseError::EmptyData => {
+                write!(f, "Отсутствуют данные для парсинга")
             }
         }
     }

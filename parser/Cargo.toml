@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 parser_macros = { path = "macros" }
+regex = "1.12.2"
