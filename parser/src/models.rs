@@ -2,6 +2,7 @@
 
 use crate::errors::ParseError;
 use parser_macros::{TxDisplay, YPBankDisplay};
+use std::collections::HashMap;
 use std::fmt::Formatter;
 
 /// Макрос преобразования структур `YPBankCsvFormat`, `YPBankTextFormat` в универсальную,
@@ -33,13 +34,27 @@ macro_rules! impl_try_from_ypbank_source {
     };
 }
 
+/// Макрос поддержки формирования структур из текстовых значений.
+macro_rules! get_field_in_map {
+    ($map:expr, $key:expr, $ty:ty) => {
+        $map.get($key)
+            .ok_or(ParseError::IncorrectField {
+                key: $key.to_string(),
+            })?
+            .parse::<$ty>()
+            .map_err(|_| ParseError::IncorrectField {
+                key: $key.to_string(),
+            })?
+    };
+}
+
 /// Тип транзакции.
 #[repr(u8)]
 #[derive(Debug, TxDisplay, Clone, PartialEq)]
 pub enum TxType {
     Deposit = 0,
     Transfer = 1,
-    Withdraw = 2,
+    Withdrawal = 2,
 }
 
 #[repr(u8)]
@@ -74,7 +89,7 @@ pub struct YPBankTransaction {
 ///
 /// Первая строка файла всегда должна содержать заголовок с именами полей. Заголовок должен точно соответствовать следующей строке:
 ///
-/// ```
+/// ```plain
 /// TX_ID,TX_TYPE,FROM_USER_ID,TO_USER_ID,AMOUNT,TIMESTAMP,STATUS,DESCRIPTION
 /// ```
 ///
@@ -115,7 +130,7 @@ impl_try_from_ypbank_source!(YPBankCsvFormat);
 ///
 /// ## Структура файла:
 ///
-/// ```
+/// ```plain
 /// [ЗАГОЛОВОК][ТЕЛО][ЗАГОЛОВОК][ТЕЛО]...
 /// ```
 ///
@@ -191,3 +206,30 @@ pub struct YPBankTextFormat {
 }
 
 impl_try_from_ypbank_source!(YPBankTextFormat);
+
+impl YPBankTextFormat {
+    /// Создаёт экземпляр структуры на основе данных из `HashMap`, где ключ и значение,
+    /// соответственно, равны этим параметрам полей структуры.
+    pub fn new_from_map(fields_map: HashMap<String, String>) -> Result<Self, ParseError> {
+        let tx_id = get_field_in_map!(fields_map, "TX_ID", u64);
+        let from_user_id = get_field_in_map!(fields_map, "FROM_USER_ID", u64);
+        let to_user_id = get_field_in_map!(fields_map, "TO_USER_ID", u64);
+        let amount = get_field_in_map!(fields_map, "AMOUNT", u64);
+        let timestamp = get_field_in_map!(fields_map, "TIMESTAMP", u64);
+        let description = get_field_in_map!(fields_map, "DESCRIPTION", String);
+
+        let tx_type = get_field_in_map!(fields_map, "TX_TYPE", TxType);
+        let status = get_field_in_map!(fields_map, "STATUS", TxStatus);
+
+        Ok(Self {
+            tx_id,
+            tx_type,
+            from_user_id,
+            to_user_id,
+            amount,
+            timestamp,
+            status,
+            description,
+        })
+    }
+}

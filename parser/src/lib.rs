@@ -36,17 +36,19 @@ impl SupportedFormat {
     /// текстовое значение.
     ///
     /// ## Пример:
+    ///
     /// ```
-    /// let fmt = SupportedFormat::from_str("text")
-    /// assert_eq!(fmt, SupportedFormat::Text)
+    /// use parser::SupportedFormat;
+    ///
+    /// let fmt = SupportedFormat::from_str("text");
     /// ```
     ///
     /// При несоответствии, возвращается ошибка `ParseError::UnsupportedFormat`.
     pub fn from_str(s: &str) -> Result<Self, ParseError> {
         match s.to_lowercase().as_str() {
             "csv" => Ok(Self::Csv),
-            s if matches!(s, "txt" | "text") => Ok(Self::Text),
-            s if matches!(s, "bin" | "binary") => Ok(Self::Binary),
+            "txt" | "text" => Ok(Self::Text),
+            "bin" | "binary" => Ok(Self::Binary),
             _ => Err(ParseError::UnsupportedFormat {
                 invalid_format: s.to_string(),
             }),
@@ -67,14 +69,14 @@ impl SupportedFormat {
     ///
     /// ## Пример
     ///
-    /// ```
+    /// ```no_run
     /// use parser::SupportedFormat;
     /// use std::fs::File;
     ///
-    /// file = std::fs::File::open("bank.txt")?;
+    /// let mut file = std::fs::File::open("bank.txt").unwrap();
     ///
-    /// let s = SupportedFormat::from_str("txt")?;
-    /// let result = s.read(file);
+    /// let s = SupportedFormat::from_str("txt").unwrap();
+    /// let result = s.read(&mut file);
     /// ```
     pub fn read<R: Read>(&self, readers: &mut R) -> Result<Vec<YPBankTransaction>, ParseError> {
         match self {
@@ -88,11 +90,11 @@ impl SupportedFormat {
     ///
     /// ## Применение
     ///
-    /// ```
+    /// ```no_run
     /// use parser::SupportedFormat;
     ///
-    /// file = std::fs::File::open("bank.csv")?;
-    /// let data = SupportedFormat::read_csv(file);
+    /// let mut file = std::fs::File::open("bank.csv").unwrap();
+    /// let data = SupportedFormat::read_csv(&mut file);
     /// ```
     pub fn read_csv<R: Read>(readers: &mut R) -> Result<Vec<YPBankTransaction>, ParseError> {
         let format = SupportedFormat::Csv;
@@ -103,11 +105,11 @@ impl SupportedFormat {
     ///
     /// ## Применение
     ///
-    /// ```
+    /// ```no_run
     /// use parser::SupportedFormat;
     ///
-    /// file = std::fs::File::open("bank.bin")?;
-    /// let data = SupportedFormat::read_csv(file);
+    /// let mut file = std::fs::File::open("bank.bin").unwrap();
+    /// let data = SupportedFormat::read_csv(&mut file);
     /// ```
     pub fn read_bin<R: Read>(readers: &mut R) -> Result<Vec<YPBankTransaction>, ParseError> {
         let format = SupportedFormat::Binary;
@@ -118,11 +120,11 @@ impl SupportedFormat {
     ///
     /// ## Применение
     ///
-    /// ```
+    /// ```no_run
     /// use parser::SupportedFormat;
     ///
-    /// file = std::fs::File::open("bank.txt")?;
-    /// let data = SupportedFormat::read_csv(file);
+    /// let mut file = std::fs::File::open("bank.txt").unwrap();
+    /// let data = SupportedFormat::read_csv(&mut file);
     /// ```
     pub fn read_text<R: Read>(readers: &mut R) -> Result<Vec<YPBankTransaction>, ParseError> {
         let format = SupportedFormat::Text;

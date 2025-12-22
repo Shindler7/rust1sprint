@@ -3,7 +3,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::Data::Enum;
-use syn::{Data, DataStruct, DeriveInput, Fields, parse_macro_input};
+use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields};
 
 /// Derive-макрос, который генерирует методы для enum категории `TxType` и `TxStatus`, позволяющие
 /// динамически взаимодействовать с перечислениями, получать их текстовые представления.
@@ -14,7 +14,9 @@ use syn::{Data, DataStruct, DeriveInput, Fields, parse_macro_input};
 ///
 /// Предоставляет возможность получить id заданного перечисления.
 ///
-/// ```
+/// ```ignore
+/// use parser::models::TxType;
+///
 /// let w = TxType::Withdraw;
 /// println!("{}", w.as_u8());
 /// ```
@@ -23,7 +25,9 @@ use syn::{Data, DataStruct, DeriveInput, Fields, parse_macro_input};
 ///
 /// Предоставляет возможность получить перечисление по его значению.
 ///
-/// ```
+/// ```ignore
+/// use parser::models::TxType;
+///
 /// let n = TxType::from_u8(0).unwrap();
 /// println!("{}", n);
 /// ```
@@ -105,6 +109,13 @@ pub fn derive_tx_display(input: TokenStream) -> TokenStream {
 
 /// Derive-макрос, который собирает методы, позволяющие обрабатывать поля структур, для их
 /// отображения (`Display`), а также использование в текстовых данных.
+///
+/// ## Доступные методы
+///
+/// * `fn has_field_from_str(field: &str) -> bool`
+///
+/// Метод для структуры, который позволяет проверить наличие поля структуры через строковое
+/// представление поля.
 #[proc_macro_derive(YPBankDisplay)]
 pub fn derive_ypbank_display(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

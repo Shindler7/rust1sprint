@@ -13,6 +13,11 @@ pub enum ParseError {
         description: String,
     },
 
+    /// Потерянное, отсутствующее поле для структуры данных.
+    IncorrectField {
+        key: String,
+    },
+
     /// Ошибка парсинга файла (например, нарушена структура).
     ParseError {
         message: String,
@@ -46,7 +51,7 @@ pub enum ParseError {
     // Неподдерживаемый формат парсинга.
     UnsupportedFormat {
         invalid_format: String,
-    }
+    },
 }
 
 impl From<std::io::Error> for ParseError {
@@ -76,6 +81,9 @@ impl Display for ParseError {
         match self {
             ParseError::IOError { description, .. } => {
                 write!(f, "Ошибка чтения/записи: {}", description)
+            }
+            ParseError::IncorrectField { key } => {
+                write!(f, "Некорректные данные для поля: {key}")
             }
             ParseError::ParseError {
                 message,
@@ -124,16 +132,12 @@ impl ParseError {
     ///
     /// ## Пример
     ///
-    /// ```
-    /// fn read_file() -> Result<String. ParseError>
-    ///    let content = read_to_string("file.txt")
-    ///         .map_err(|err| { ParseError::io_error(err, "Не могу прочитать файл")}?);
+    /// ```no_run
+    /// use std::fs::read_to_string;
+    /// use parser::errors::ParseError;
     ///
-    ///     if content.is_empty() {
-    ///         return Err(ParseError::parse_error("В файле нет данных", 1, 1));
-    ///     }
-    ///
-    ///     Ok(content)
+    /// let content = read_to_string("file.txt")
+    ///         .map_err(|err| { ParseError::io_error(err, "Не могу прочитать файл")});
     /// ```
     pub fn io_error(err_source: IOError, description: impl Into<String>) -> Self {
         Self::IOError {

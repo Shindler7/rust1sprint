@@ -22,6 +22,9 @@ fn main() {
 
     // Открываем файл и читаем.
     let mut file = File::open(records_txt).unwrap();
-    
+
     let data = SupportedFormat::read_text(&mut file).unwrap();
+    println!("OK");
+    println!("Количество записей: {}", data.len());
+    println!("Последняя запись: {}", data.last().unwrap());
 }

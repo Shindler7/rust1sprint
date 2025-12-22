@@ -17,6 +17,10 @@ impl<T: AsRef<str>> LineUtils for T {
         self.as_ref().trim().starts_with("#")
     }
 
+    /// Возвращает два значения `ключ` и `значение` для строки вида 
+    /// `key:parameter`.
+    ///
+    /// `Key` будет преобразован в `uppercase`.
     fn split_into_key_value(&self) -> Option<(String, String)> {
         let (k, v) = self.as_ref().split_once(':')?;
         let key = k.trim().to_uppercase();
