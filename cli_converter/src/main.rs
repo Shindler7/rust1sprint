@@ -2,8 +2,9 @@
 
 use cli::current_dir;
 use std::fs::File;
+use std::io::Stdout;
 
-use parser::SupportedFormat;
+use parser::*;
 
 mod cli;
 
@@ -22,9 +23,19 @@ fn main() {
 
     // Открываем файл и читаем.
     let mut file = File::open(records_txt).unwrap();
+    let data = read_text(&mut file).unwrap();
 
-    let data = SupportedFormat::read_text(&mut file).unwrap();
     println!("OK");
     println!("Количество записей: {}", data.len());
     println!("Последняя запись: {}", data.last().unwrap());
+
+    // Теперь попытка опубликовать последнюю запись.
+    let record_txt_new = source_dir.join("records_new.txt");
+    println!("{}", record_txt_new.to_string_lossy());
+
+    let mut file = File::create(record_txt_new).unwrap();
+
+    let data_last = data.last().unwrap().clone();
+
+    write_text(&mut file, data_last).unwrap();
 }

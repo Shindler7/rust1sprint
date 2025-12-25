@@ -1,18 +1,17 @@
 //! Запись и чтение файлов бинарного формата.
 
 use crate::errors::ParseError;
-use crate::models::YPBankTransaction;
+use crate::models::YPBankBinFormat;
 use crate::traits::YPBankIO;
 use std::io::{Read, Write};
 
-pub struct BinFormatIO {}
+impl YPBankIO for YPBankBinFormat {
+    type DataFormat = YPBankBinFormat;
 
-impl YPBankIO for BinFormatIO {
-    fn read<R: Read>(reader: &mut R) -> Result<Vec<YPBankTransaction>, ParseError> {
+    fn read_from<R: Read>(reader: &mut R) -> Result<Vec<Self::DataFormat>, ParseError> {
         todo!()
     }
-
-    fn write<W: Write>(writer: W, records: YPBankTransaction) -> Result<(), ParseError> {
+    fn write_to<W: Write>(writer: W, records: Self::DataFormat) -> Result<(), ParseError> {
         todo!()
     }
 }

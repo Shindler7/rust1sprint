@@ -1,14 +1,13 @@
 //! Общие модели представления данных для чтения/записи, парсинга.
 
 use crate::errors::ParseError;
-use parser_macros::{TxDisplay, YPBankDisplay};
+use parser_macros::{TxDisplay, YPBankFields};
 use std::collections::HashMap;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 
 /// Макрос преобразования структур `YPBankCsvFormat`, `YPBankTextFormat` в универсальную,
 /// и предусмотрены необходимые схожие проверки.
-#[macro_export]
-macro_rules! impl_try_from_ypbank_source {
+macro_rules! impl_try_from_yp_format_to_transaction {
     ($source_type:ty) => {
         impl TryFrom<$source_type> for YPBankTransaction {
             type Error = ParseError;
@@ -27,7 +26,38 @@ macro_rules! impl_try_from_ypbank_source {
                     amount,
                     timestamp: source.timestamp,
                     status: source.status,
-                    description: Some(source.description),
+                    description: source.description.into(),
+                })
+            }
+        }
+    };
+}
+
+/// Макрос преобразования структуры `YPBankTransaction` в структуры `YPBankCsvFormat`
+/// и `YPBankTextFormat`. Для бинарной структуры создан отдельный метод, потому что внутри
+/// предусматривается индивидуальная проработка с полями.
+///
+/// Возможно для макроса ложное предупреждение `PyCharm`.
+macro_rules! impl_try_from_transaction_to_yp_format {
+    ($dest_type:ident) => {
+        impl TryFrom<YPBankTransaction> for $dest_type {
+            type Error = ParseError;
+
+            fn try_from(value: YPBankTransaction) -> Result<Self, ParseError> {
+                let description = match value.description {
+                    Some(d) => d,
+                    None => "".to_string(),
+                };
+
+                Ok($dest_type {
+                    tx_id: value.tx_id,
+                    tx_type: value.tx_type,
+                    from_user_id: value.from_user_id,
+                    to_user_id: value.to_user_id,
+                    amount: value.amount as u64,
+                    timestamp: value.timestamp,
+                    status: value.status,
+                    description,
                 })
             }
         }
@@ -67,7 +97,7 @@ pub enum TxStatus {
 
 /// Универсальная структура представления данных для записи/чтения, позволяющая парсить
 /// исходные сведения, а также при извлечении их из хранения.
-#[derive(Debug, Clone, PartialEq, YPBankDisplay)]
+#[derive(Debug, Clone, PartialEq, YPBankFields)]
 pub struct YPBankTransaction {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -78,6 +108,10 @@ pub struct YPBankTransaction {
     pub status: TxStatus,
     pub description: Option<String>,
 }
+
+impl_try_from_yp_format_to_transaction!(YPBankCsvFormat);
+impl_try_from_yp_format_to_transaction!(YPBankTextFormat);
+impl_try_from_yp_format_to_transaction!(YPBankBinFormat);
 
 /// Текстовый файл с разделителями-запятыми (`CSV`), предназначенный для хранения
 /// данных о транзакциях. Файл имеет строгую структуру: обязательная строка заголовка
@@ -106,7 +140,7 @@ pub struct YPBankTransaction {
 /// 1002,TRANSFER,501,502,15000,1672534800000,FAILURE,"Payment for services, invoice #123"
 /// 1003,WITHDRAWAL,502,0,1000,1672538400000,PENDING,"ATM withdrawal"
 /// ```
-#[derive(Debug, YPBankDisplay)]
+#[derive(Debug, YPBankFields)]
 pub struct YPBankCsvFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -118,7 +152,13 @@ pub struct YPBankCsvFormat {
     pub description: String,
 }
 
-impl_try_from_ypbank_source!(YPBankCsvFormat);
+impl_try_from_transaction_to_yp_format!(YPBankCsvFormat);
+
+impl YPBankCsvFormat {
+    pub fn new_from_string(line_fields: &String) -> YPBankCsvFormat {
+
+    }
+}
 
 /// Бинарный формат YPBankBin — это компактное, бинарное представление тех же данных
 /// о транзакциях, которые описаны в текстовом формате `YPBankText`.
@@ -136,7 +176,7 @@ impl_try_from_ypbank_source!(YPBankCsvFormat);
 ///
 /// Наличие значения `MAGIC` в начале каждой записи позволяет читателю повторно
 /// синхронизироваться в случае потери границы записи или повреждения данных.
-#[derive(Debug, YPBankDisplay)]
+#[derive(Debug, YPBankFields)]
 pub struct YPBankBinFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -151,21 +191,26 @@ pub struct YPBankBinFormat {
     pub description: Option<String>,
 }
 
-impl TryFrom<YPBankBinFormat> for YPBankTransaction {
+impl TryFrom<YPBankTransaction> for YPBankBinFormat {
     type Error = ParseError;
-    fn try_from(bin: YPBankBinFormat) -> Result<Self, ParseError> {
-        let yp_uni = YPBankTransaction {
-            tx_id: bin.tx_id,
-            tx_type: bin.tx_type,
-            from_user_id: bin.from_user_id,
-            to_user_id: bin.to_user_id,
-            amount: bin.amount,
-            timestamp: bin.timestamp,
-            status: bin.status,
-            description: bin.description,
+    fn try_from(value: YPBankTransaction) -> Result<Self, Self::Error> {
+        let desc_len = match &value.description {
+            Some(d) => { u32::try_from(d.len()) }
+                .map_err(|_| ParseError::over_flow_size("usize", "u32", d))?,
+            None => 0,
         };
 
-        Ok(yp_uni)
+        Ok(Self {
+            tx_id: value.tx_id,
+            tx_type: value.tx_type,
+            from_user_id: value.from_user_id,
+            to_user_id: value.to_user_id,
+            amount: value.amount,
+            timestamp: value.timestamp,
+            status: value.status,
+            desc_len,
+            description: value.description,
+        })
     }
 }
 
@@ -193,7 +238,7 @@ impl TryFrom<YPBankBinFormat> for YPBankTransaction {
 /// STATUS: SUCCESS
 /// DESCRIPTION: "Terminal deposit"
 /// ```
-#[derive(Debug, YPBankDisplay)]
+#[derive(Debug, YPBankFields, Clone)]
 pub struct YPBankTextFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -205,7 +250,20 @@ pub struct YPBankTextFormat {
     pub description: String,
 }
 
-impl_try_from_ypbank_source!(YPBankTextFormat);
+impl_try_from_transaction_to_yp_format!(YPBankTextFormat);
+
+impl Display for YPBankTextFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "TX_ID: {}", self.tx_id)?;
+        writeln!(f, "TX_TYPE: {}", self.tx_type)?;
+        writeln!(f, "FROM_USER_ID: {}", self.from_user_id)?;
+        writeln!(f, "TO_USER_ID: {}", self.to_user_id)?;
+        writeln!(f, "AMOUNT: {}", self.amount)?;
+        writeln!(f, "TIMESTAMP: {}", self.timestamp)?;
+        writeln!(f, "STATUS: {}", self.status)?;
+        writeln!(f, "DESCRIPTION: {}", self.description)
+    }
+}
 
 impl YPBankTextFormat {
     /// Создаёт экземпляр структуры на основе данных из `HashMap`, где ключ и значение,

@@ -2,21 +2,20 @@
 
 use crate::errors::ParseError;
 use crate::format::tools::LineUtils;
-use crate::models::{YPBankTextFormat, YPBankTransaction};
+use crate::models::YPBankTextFormat;
 use crate::traits::YPBankIO;
 use regex::Regex;
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::Write;
 
-pub struct TxtFormatIO {}
+impl YPBankIO for YPBankTextFormat {
+    /// Парсинг (чтение) данных в формате `txt`.
+    ///
+    /// Возвращает вектор экземпляров `YPBankTextFormat`, содержащих все записи из источника.
+    type DataFormat = YPBankTextFormat;
 
-impl YPBankIO for TxtFormatIO {
-    /// Чтение данных в формате TXT.
-    fn read<R: Read>(reader: &mut R) -> Result<Vec<YPBankTransaction>, ParseError> {
-        let mut buffer = String::new();
-        reader.read_to_string(&mut buffer)?;
-
-        let mut transaction: Vec<YPBankTransaction> = Vec::new();
+    fn read_executor(buffer: String) -> Result<Vec<YPBankTextFormat>, ParseError> {
+        let mut transaction: Vec<YPBankTextFormat> = Vec::new();
 
         let mut block_buffer: Vec<String> = Vec::new();
         for (count, line) in buffer.lines().enumerate() {
@@ -27,16 +26,16 @@ impl YPBankIO for TxtFormatIO {
             match (block_buffer.is_empty(), line.is_hash_marker()) {
                 (true, true) => {
                     // Начало блока.
-                    let title = Self::parse_title_block(line, count)?;
+                    let title = Self::parse_title(line, count)?;
                     block_buffer.push(title);
                 }
                 (false, true) => {
                     // Буфер собрали. Надо отдать его на обработку и обнулить.
                     let block_data = Self::parse_block(&block_buffer, count)?;
-                    transaction.push(block_data.try_into()?);
+                    transaction.push(block_data);
                     block_buffer.clear(); // Обработанные данные.
 
-                    let title = Self::parse_title_block(line, count)?; // Новый цикл.
+                    let title = Self::parse_title(line, count)?; // Новый цикл.
                     block_buffer.push(title);
                 }
                 (false, false) => {
@@ -55,23 +54,24 @@ impl YPBankIO for TxtFormatIO {
 
         if !block_buffer.is_empty() {
             let block_data = Self::parse_block(&block_buffer, buffer.lines().count())?;
-            transaction.push(block_data.try_into()?);
-        }
-
-        if transaction.is_empty() {
-            return Err(ParseError::EmptyData);
+            transaction.push(block_data);
         }
 
         Ok(transaction)
     }
 
-    /// Запись данных в формате TXT.
-    fn write<W: Write>(writer: W, records: YPBankTransaction) -> Result<(), ParseError> {
-        todo!()
+    /// Добавить запись на основе предоставленного экземпляра `YPBankTextFormat`.
+    fn write_to<W: Write>(mut writer: W, records: Self::DataFormat) -> Result<(), ParseError> {
+        let print_data = Self::makeup_records(&records);
+        writer.write_all(print_data.as_bytes()).map_err(|e| {
+            ParseError::io_error(e, format!("Неудачная попытка записи данных: {print_data}"))
+        })?;
+
+        Ok(())
     }
 }
 
-impl TxtFormatIO {
+impl YPBankTextFormat {
     /// Парсинг отдельного блока информации.
     ///
     /// # Аргументы
@@ -131,7 +131,7 @@ impl TxtFormatIO {
     /// ```plain
     /// ## Record 1 (DEPOSIT)
     /// ```
-    fn parse_title_block(line: &str, count_line: usize) -> Result<String, ParseError> {
+    fn parse_title(line: &str, count_line: usize) -> Result<String, ParseError> {
         let re = Regex::new(r#"^#\s*Record\s+\d+\s*\((?P<tx_type>[^)]+)\)$"#)
             .expect("Ошибка в регулярном выражении парсинга заголовка блоков формата TXT");
 
@@ -145,6 +145,23 @@ impl TxtFormatIO {
                     0,
                 )
             })
+    }
+
+    /// Подготовить единицу записи к публикации.
+    fn makeup_records(records: &YPBankTextFormat) -> String {
+        format!("{}\n{}\n", Self::make_title(&records), records)
+    }
+
+    /// Формирует заголовок блока записи.
+    ///
+    /// ## Образец заголовка
+    ///
+    /// ```plain
+    /// ## Record 2 (TRANSFER)
+    /// ```
+    fn make_title(records: &YPBankTextFormat) -> String {
+        let tx_id = records.tx_id % 1_000_000_000_000_000;
+        format!("# Record {} ({})", tx_id, records.tx_type)
     }
 }
 
@@ -173,7 +190,7 @@ STATUS: SUCCESS\n"
         let input = sample_block(1);
         let mut cursor = Cursor::new(input);
 
-        let result = TxtFormatIO::read(&mut cursor);
+        let result = YPBankTextFormat::read_from(&mut cursor);
         assert!(result.is_ok());
 
         let transactions = result.unwrap();
@@ -185,7 +202,7 @@ STATUS: SUCCESS\n"
         let input = format!("{}\n{}", sample_block(1), sample_block(2));
         let mut cursor = Cursor::new(input);
 
-        let result = TxtFormatIO::read(&mut cursor);
+        let result = YPBankTextFormat::read_from(&mut cursor);
         assert!(result.is_ok());
 
         let txs = result.unwrap();
@@ -195,7 +212,7 @@ STATUS: SUCCESS\n"
     #[test]
     fn test_read_empty_input() {
         let mut cursor = Cursor::new("");
-        let result = TxtFormatIO::read(&mut cursor);
+        let result = YPBankTextFormat::read_from(&mut cursor);
 
         assert!(matches!(result, Err(ParseError::EmptyData)));
     }
@@ -204,7 +221,7 @@ STATUS: SUCCESS\n"
     fn test_invalid_line_before_header() {
         let input = "TX_TYPE: DEPOSIT\n# Record 1 (DEPOSIT)\n...";
         let mut cursor = Cursor::new(input);
-        let result = TxtFormatIO::read(&mut cursor);
+        let result = YPBankTextFormat::read_from(&mut cursor);
 
         assert!(result.is_err());
     }
@@ -224,7 +241,7 @@ AMOUNT: 1000
 STATUS: SUCCESS
 ";
         let mut cursor = Cursor::new(input);
-        let result = TxtFormatIO::read(&mut cursor);
+        let result = YPBankTextFormat::read_from(&mut cursor);
 
         assert!(result.is_err()); // Ошибка должна быть из-за `UNKNOWN_FIELD`
     }

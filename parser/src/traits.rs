@@ -5,6 +5,21 @@ use crate::models::YPBankTransaction;
 use std::io::{Read, Write};
 
 pub trait YPBankIO {
-    fn read<R: Read>(reader: &mut R) -> Result<Vec<YPBankTransaction>, ParseError>;
-    fn write<W: Write>(writer: W, records: YPBankTransaction) -> Result<(), ParseError>;
+    type DataFormat;
+    fn read_from<R: Read>(reader: &mut R) -> Result<Vec<Self::DataFormat>, ParseError> {
+        let mut buffer = String::new();
+        reader
+            .read_to_string(&mut buffer)
+            .map_err(|e| ParseError::io_error(e, "Ошибка парсинга данных"))?;
+
+        let transaction = Self::read_executor(buffer)?;
+        if transaction.is_empty() {
+            return Err(ParseError::EmptyData);
+        }
+
+        Ok(transaction)
+    }
+
+    fn read_executor(buffer: String) -> Result<Vec<Self::DataFormat>, ParseError>;
+    fn write_to<W: Write>(writer: W, records: Self::DataFormat) -> Result<(), ParseError>;
 }

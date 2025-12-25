@@ -5,6 +5,9 @@ pub trait LineUtils {
     fn is_empty_line(&self) -> bool;
     fn is_hash_marker(&self) -> bool;
     fn split_into_key_value(&self) -> Option<(String, String)>;
+    fn is_eq(&self, other: &str) -> bool;
+    fn split_csv_line(&self) -> Option<Vec<String>>;
+    fn clean_quote(&self) -> String;
 }
 
 impl<T: AsRef<str>> LineUtils for T {
@@ -17,7 +20,7 @@ impl<T: AsRef<str>> LineUtils for T {
         self.as_ref().trim().starts_with("#")
     }
 
-    /// Возвращает два значения `ключ` и `значение` для строки вида 
+    /// Возвращает два значения `ключ` и `значение` для строки вида
     /// `key:parameter`.
     ///
     /// `Key` будет преобразован в `uppercase`.
@@ -29,21 +32,44 @@ impl<T: AsRef<str>> LineUtils for T {
             return None;
         }
 
-        let val_clean = value
-            .strip_prefix('"')
-            .and_then(|s| s.strip_suffix('"'))
-            .unwrap_or(value)
-            .to_string();
+        let val_clean = value.clean_quote();
 
         Some((key, val_clean))
+    }
+
+    /// Проверить соответствие строк, исключая пробелы и другие избыточные символы.
+    fn is_eq(&self, other: &str) -> bool {
+        self.as_ref().trim().eq(other.trim())
+    }
+
+    /// Разделение строки по единообразному формату для CSV: через запятую.
+    fn split_csv_line(&self) -> Option<Vec<String>> {
+        let line = self.as_ref().trim();
+        let result = line.split(',').collect::<Vec<_>>();
+        if result.len() == 1 {
+            return None;
+        }
+
+        Some(result.into_iter().map(|s| s.clean_quote()).collect())
+    }
+
+    /// Очищает строковые данные от кавычек, если есть. Возвращает без них, если найдены, или
+    /// оригинальную строку, если кавычек не было.
+    fn clean_quote(&self) -> String {
+        let line = self.as_ref();
+
+        line.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(line)
+            .to_string()
     }
 }
 
 #[macro_export]
 macro_rules! parse_field {
         ($key:literal, $type:ty) => {
-            
-            
+
+
             fields
                 .get($key)
                 .ok_or_else(|| ParseError::parse_error(concat!("Отсутствует поле: ", $key), 0, 0))

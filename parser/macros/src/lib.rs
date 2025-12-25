@@ -3,7 +3,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::Data::Enum;
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields};
+use syn::{Data, DataStruct, DeriveInput, Fields, parse_macro_input};
 
 /// Derive-макрос, который генерирует методы для enum категории `TxType` и `TxStatus`, позволяющие
 /// динамически взаимодействовать с перечислениями, получать их текстовые представления.
@@ -107,68 +107,78 @@ pub fn derive_tx_display(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Derive-макрос, который собирает методы, позволяющие обрабатывать поля структур, для их
-/// отображения (`Display`), а также использование в текстовых данных.
+/// Макрос `YPBankDisplay` автоматически реализует методы для работы со строковыми представлениями
+/// полей структуры: проверка наличия поля по имени (в любом регистре).
 ///
-/// ## Доступные методы
+/// ## Реализуемые методы
 ///
-/// * `fn has_field_from_str(field: &str) -> bool`
+/// - `fn has_field_from_str(field: &str) -> bool` — проверяет наличие поля по строковому имени.
+/// - `fn fields() -> [&'static str; N]` — возвращает массив имён полей в верхнем регистре.
 ///
-/// Метод для структуры, который позволяет проверить наличие поля структуры через строковое
-/// представление поля.
-#[proc_macro_derive(YPBankDisplay)]
-pub fn derive_ypbank_display(input: TokenStream) -> TokenStream {
+/// ## Ограничения:
+/// Работает только с именованными структурами (без tuple-structs и unit-structs).
+#[proc_macro_derive(YPBankFields)]
+pub fn derive_ypbank_fields(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let struct_name = input.ident;
 
     let fields_named = match input.data {
         Data::Struct(DataStruct {
-            fields: Fields::Named(fields_named),
+            fields: Fields::Named(ref named_fields),
             ..
-        }) => fields_named,
-        _ => panic!("YPBankDisplay работает только с именованными структурами"),
+        }) => named_fields,
+        _ => {
+            return syn::Error::new_spanned(
+                struct_name,
+                "YPBankDisplay работает только с именованными структурами",
+            )
+            .to_compile_error()
+            .into();
+        }
     };
 
-    // Собираем имена полей и их UPPERCASE
+    // Собираем идентификаторы и строковые версии имён полей.
     let field_pairs: Vec<_> = fields_named
         .named
         .iter()
         .filter_map(|f| f.ident.as_ref())
         .map(|ident| {
-            let field_name = ident.to_string();
-            let uppercase = field_name.to_uppercase();
-            (ident, field_name, uppercase)
+            let field_str = ident.to_string();
+            let uppercase = field_str.to_uppercase();
+            (ident.clone(), field_str, uppercase)
         })
         .collect();
 
-    // Литерные (utf-8) названия полей в UPPERCASE.
-    let liter_fields = field_pairs
+    // Создаём выражения (`"FIELD_NAME"`) для массива `fields()`.
+    let field_names = field_pairs
         .iter()
-        .map(|(_, _, uppercase)| syn::LitStr::new(uppercase, name.span()));
+        .map(|(_, _, uppercase)| syn::LitStr::new(uppercase, struct_name.span()));
 
-    // Display::fmt - просто перечисляем поля
-    let display_fields = field_pairs.iter().map(|(ident, field_name, _)| {
-        quote! {
-            write!(f, "{}: {:?}, ", #field_name, self.#ident)?;
-        }
-    });
-
+    let field_count = field_pairs.len();
+    // Генерируем реализацию
     let expanded = quote! {
-        impl std::fmt::Display for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{} {{ ", stringify!(#name))?;
-                #(#display_fields)*
-                write!(f, "}}")
+        impl #struct_name {
+            /// Проверяет, содержится ли поле с заданным именем (в любом регистре) в структуре.
+            ///
+            /// ```
+            /// assert!(MyStruct::has_field_from_str("id"));
+            /// assert!(MyStruct::has_field_from_str("ID"));
+            /// assert!(!MyStruct::has_field_from_str("not_a_field"));
+            /// ```
+            pub fn fields() -> [&'static str; #field_count] {
+                [
+                    #(#field_names),*
+                ]
             }
-        }
 
-        impl #name {
+            /// Возвращает список имён всех полей структуры в верхнем регистре.
+            ///
+            /// Метод полезен при автоматическом отображении или проверке допустимых значений.
             pub fn has_field_from_str(field: &str) -> bool {
-                matches!(
-                    field.to_uppercase().as_str(),
-                    #(#liter_fields)|*
-                )
+                let field_upper = field.to_uppercase();
+                Self::fields().contains(&field_upper.as_str())
             }
+
         }
     };
 
