@@ -21,5 +21,5 @@ pub trait YPBankIO {
     }
 
     fn read_executor(buffer: String) -> Result<Vec<Self::DataFormat>, ParseError>;
-    fn write_to<W: Write>(writer: W, records: Self::DataFormat) -> Result<(), ParseError>;
+    fn write_to<W: Write>(writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError>;
 }

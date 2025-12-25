@@ -37,5 +37,16 @@ fn main() {
 
     let data_last = data.last().unwrap().clone();
 
-    write_text(&mut file, data_last).unwrap();
+    write_text(&mut file, &[data_last]).unwrap();
+
+    // CSV.
+    let records_csv = source_dir.join("records_example.csv");
+    if !records_csv.exists() {
+        panic!("Необходимый файл CSV с записями отсутствует!")
+    }
+    let mut file_csv = File::open(records_csv).unwrap();
+    let data = read_csv(&mut file_csv).unwrap();
+    println!("OK CSV");
+    println!("Количество записей CSV: {}", data.len());
+    println!("Последняя запись: {:?}", data.last().unwrap());
 }

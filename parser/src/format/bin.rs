@@ -11,7 +11,12 @@ impl YPBankIO for YPBankBinFormat {
     fn read_from<R: Read>(reader: &mut R) -> Result<Vec<Self::DataFormat>, ParseError> {
         todo!()
     }
-    fn write_to<W: Write>(writer: W, records: Self::DataFormat) -> Result<(), ParseError> {
+
+    fn read_executor(buffer: String) -> Result<Vec<Self::DataFormat>, ParseError> {
+        todo!()
+    }
+
+    fn write_to<W: Write>(writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError> {
         todo!()
     }
 }

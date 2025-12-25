@@ -14,7 +14,7 @@ pub fn read_csv<R: Read>(readers: &mut R) -> Result<Vec<YPBankCsvFormat>, ParseE
     YPBankCsvFormat::read_from(readers)
 }
 
-pub fn write_csv<W: Write>(writer: &mut W, records: YPBankCsvFormat) -> Result<(), ParseError> {
+pub fn write_csv<W: Write>(writer: &mut W, records: &[YPBankCsvFormat]) -> Result<(), ParseError> {
     YPBankCsvFormat::write_to(writer, records)
 }
 
@@ -22,7 +22,7 @@ pub fn read_bin<R: Read>(readers: &mut R) -> Result<Vec<YPBankBinFormat>, ParseE
     YPBankBinFormat::read_from(readers)
 }
 
-pub fn write_bin<W: Write>(writer: &mut W, records: YPBankBinFormat) -> Result<(), ParseError> {
+pub fn write_bin<W: Write>(writer: &mut W, records: &[YPBankBinFormat]) -> Result<(), ParseError> {
     YPBankBinFormat::write_to(writer, records)
 }
 
@@ -30,6 +30,9 @@ pub fn read_text<R: Read>(readers: &mut R) -> Result<Vec<YPBankTextFormat>, Pars
     YPBankTextFormat::read_from(readers)
 }
 
-pub fn write_text<R: Write>(writer: &mut R, records: YPBankTextFormat) -> Result<(), ParseError> {
+pub fn write_text<R: Write>(
+    writer: &mut R,
+    records: &[YPBankTextFormat],
+) -> Result<(), ParseError> {
     YPBankTextFormat::write_to(writer, records)
 }

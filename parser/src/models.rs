@@ -155,8 +155,26 @@ pub struct YPBankCsvFormat {
 impl_try_from_transaction_to_yp_format!(YPBankCsvFormat);
 
 impl YPBankCsvFormat {
-    pub fn new_from_string(line_fields: &String) -> YPBankCsvFormat {
+    pub fn new_from_map(fields: &HashMap<String, String>) -> Result<Self, ParseError> {
+        let tx_id = get_field_in_map!(fields, "TX_ID", u64);
+        let tx_type = get_field_in_map!(fields, "TX_TYPE", TxType);
+        let from_user_id = get_field_in_map!(fields, "FROM_USER_ID", u64);
+        let to_user_id = get_field_in_map!(fields, "TO_USER_ID", u64);
+        let amount = get_field_in_map!(fields, "AMOUNT", u64);
+        let timestamp = get_field_in_map!(fields, "TIMESTAMP", u64);
+        let status = get_field_in_map!(fields, "STATUS", TxStatus);
+        let description = get_field_in_map!(fields, "DESCRIPTION", String);
 
+        Ok(Self {
+            tx_id,
+            tx_type,
+            from_user_id,
+            to_user_id,
+            amount,
+            timestamp,
+            status,
+            description,
+        })
     }
 }
 

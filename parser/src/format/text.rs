@@ -60,12 +60,11 @@ impl YPBankIO for YPBankTextFormat {
         Ok(transaction)
     }
 
-    /// Добавить запись на основе предоставленного экземпляра `YPBankTextFormat`.
-    fn write_to<W: Write>(mut writer: W, records: Self::DataFormat) -> Result<(), ParseError> {
-        let print_data = Self::makeup_records(&records);
-        writer.write_all(print_data.as_bytes()).map_err(|e| {
-            ParseError::io_error(e, format!("Неудачная попытка записи данных: {print_data}"))
-        })?;
+    /// Добавить записи на основе предоставленного экземпляра `YPBankTextFormat`.
+    fn write_to<W: Write>(mut writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError> {
+        for record in records {
+            writeln!(writer, "{record}")?;
+        }
 
         Ok(())
     }
