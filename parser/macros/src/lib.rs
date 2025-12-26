@@ -160,10 +160,12 @@ pub fn derive_ypbank_fields(input: TokenStream) -> TokenStream {
         impl #struct_name {
             /// Проверяет, содержится ли поле с заданным именем (в любом регистре) в структуре.
             ///
-            /// ```
-            /// assert!(MyStruct::has_field_from_str("id"));
-            /// assert!(MyStruct::has_field_from_str("ID"));
-            /// assert!(!MyStruct::has_field_from_str("not_a_field"));
+            /// ```no_run
+            /// use parser::models::YPBankCsvFormat;
+            /// 
+            /// assert!(YPBankCsvFormat::has_field_from_str("id"));
+            /// assert!(YPBankCsvFormat::has_field_from_str("ID"));
+            /// assert!(!YPBankCsvFormat::has_field_from_str("not_a_field"));
             /// ```
             pub fn fields() -> [&'static str; #field_count] {
                 [

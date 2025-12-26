@@ -140,7 +140,7 @@ impl_try_from_yp_format_to_transaction!(YPBankBinFormat);
 /// 1002,TRANSFER,501,502,15000,1672534800000,FAILURE,"Payment for services, invoice #123"
 /// 1003,WITHDRAWAL,502,0,1000,1672538400000,PENDING,"ATM withdrawal"
 /// ```
-#[derive(Debug, YPBankFields)]
+#[derive(Debug, YPBankFields, Clone)]
 pub struct YPBankCsvFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -156,24 +156,15 @@ impl_try_from_transaction_to_yp_format!(YPBankCsvFormat);
 
 impl YPBankCsvFormat {
     pub fn new_from_map(fields: &HashMap<String, String>) -> Result<Self, ParseError> {
-        let tx_id = get_field_in_map!(fields, "TX_ID", u64);
-        let tx_type = get_field_in_map!(fields, "TX_TYPE", TxType);
-        let from_user_id = get_field_in_map!(fields, "FROM_USER_ID", u64);
-        let to_user_id = get_field_in_map!(fields, "TO_USER_ID", u64);
-        let amount = get_field_in_map!(fields, "AMOUNT", u64);
-        let timestamp = get_field_in_map!(fields, "TIMESTAMP", u64);
-        let status = get_field_in_map!(fields, "STATUS", TxStatus);
-        let description = get_field_in_map!(fields, "DESCRIPTION", String);
-
         Ok(Self {
-            tx_id,
-            tx_type,
-            from_user_id,
-            to_user_id,
-            amount,
-            timestamp,
-            status,
-            description,
+            tx_id: get_field_in_map!(fields, "TX_ID", u64),
+            tx_type: get_field_in_map!(fields, "TX_TYPE", TxType),
+            from_user_id: get_field_in_map!(fields, "FROM_USER_ID", u64),
+            to_user_id: get_field_in_map!(fields, "TO_USER_ID", u64),
+            amount: get_field_in_map!(fields, "AMOUNT", u64),
+            timestamp: get_field_in_map!(fields, "TIMESTAMP", u64),
+            status: get_field_in_map!(fields, "STATUS", TxStatus),
+            description: get_field_in_map!(fields, "DESCRIPTION", String),
         })
     }
 }
@@ -194,7 +185,7 @@ impl YPBankCsvFormat {
 ///
 /// Наличие значения `MAGIC` в начале каждой записи позволяет читателю повторно
 /// синхронизироваться в случае потери границы записи или повреждения данных.
-#[derive(Debug, YPBankFields)]
+#[derive(Debug, YPBankFields, Clone)]
 pub struct YPBankBinFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -287,25 +278,15 @@ impl YPBankTextFormat {
     /// Создаёт экземпляр структуры на основе данных из `HashMap`, где ключ и значение,
     /// соответственно, равны этим параметрам полей структуры.
     pub fn new_from_map(fields_map: HashMap<String, String>) -> Result<Self, ParseError> {
-        let tx_id = get_field_in_map!(fields_map, "TX_ID", u64);
-        let from_user_id = get_field_in_map!(fields_map, "FROM_USER_ID", u64);
-        let to_user_id = get_field_in_map!(fields_map, "TO_USER_ID", u64);
-        let amount = get_field_in_map!(fields_map, "AMOUNT", u64);
-        let timestamp = get_field_in_map!(fields_map, "TIMESTAMP", u64);
-        let description = get_field_in_map!(fields_map, "DESCRIPTION", String);
-
-        let tx_type = get_field_in_map!(fields_map, "TX_TYPE", TxType);
-        let status = get_field_in_map!(fields_map, "STATUS", TxStatus);
-
         Ok(Self {
-            tx_id,
-            tx_type,
-            from_user_id,
-            to_user_id,
-            amount,
-            timestamp,
-            status,
-            description,
+            tx_id: get_field_in_map!(fields_map, "TX_ID", u64),
+            tx_type: get_field_in_map!(fields_map, "TX_TYPE", TxType),
+            from_user_id: get_field_in_map!(fields_map, "FROM_USER_ID", u64),
+            to_user_id: get_field_in_map!(fields_map, "TO_USER_ID", u64),
+            amount: get_field_in_map!(fields_map, "AMOUNT", u64),
+            timestamp: get_field_in_map!(fields_map, "TIMESTAMP", u64),
+            status: get_field_in_map!(fields_map, "STATUS", TxStatus),
+            description: get_field_in_map!(fields_map, "DESCRIPTION", String),
         })
     }
 }

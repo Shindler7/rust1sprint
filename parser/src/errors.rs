@@ -25,6 +25,10 @@ pub enum ParseError {
         column: usize,
     },
 
+    ParseBinaryError {
+        message: String,
+    },
+
     /// Предоставленный комплект для парсинга пустой.
     EmptyData,
 
@@ -64,6 +68,12 @@ impl From<std::io::Error> for ParseError {
     }
 }
 
+impl From<std::string::FromUtf8Error> for ParseError {
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        ParseError::parse_bin_error(err.to_string())
+    }
+}
+
 impl Error for ParseError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -96,6 +106,14 @@ impl Display for ParseError {
                     line, column, message
                 )
             }
+            ParseError::ParseBinaryError { message } => {
+                if message.is_empty() {
+                    write!(f, "Ошибка парсинга бинарного файла")
+                } else {
+                    write!(f, "Ошибка парсинга бинарного файла: {}", message)
+                }
+            }
+
             ParseError::InvalidFormat { expected, got, .. } => {
                 write!(
                     f,
@@ -152,6 +170,16 @@ impl ParseError {
             message: message.into(),
             line,
             column,
+        }
+    }
+
+    /// Конструктор ошибки `ParseBinaryError`.
+    ///
+    /// Аргумент `message` может быть пустым, в таком случае будет подменён фразой
+    /// по-умолчанию.
+    pub fn parse_bin_error(message: impl Into<String>) -> Self {
+        Self::ParseBinaryError {
+            message: message.into(),
         }
     }
 

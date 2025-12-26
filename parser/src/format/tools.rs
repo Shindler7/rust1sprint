@@ -42,26 +42,72 @@ impl<T: AsRef<str>> LineUtils for T {
         self.as_ref().trim().eq(other.trim())
     }
 
-    /// Разделение строки по единообразному формату для CSV: через запятую.
+    /// Парсер строк csv-записей. Разбирает строку на блоки, разделённые запятыми. Особое внимание
+    /// к последнему блоку, который должен быть в кавычках, а внутри также может содержать запятые,
+    /// лишние кавычки.
+    ///
+    /// Корректность (длина, наличие всех блоков) собранной строки не проверяет.
     fn split_csv_line(&self) -> Option<Vec<String>> {
-        let line = self.as_ref().trim();
-        let result = line.split(',').collect::<Vec<_>>();
-        if result.len() == 1 {
-            return None;
+        let mut fields = Vec::new();
+        let mut buffer = String::new();
+        let mut chars = self.as_ref().chars().peekable();
+
+        while let Some(ch) = chars.next() {
+            match ch {
+                '"' => {
+                    // Начало поля с кавычками — предполагаем, что description
+                    if !buffer.trim().is_empty() {
+                        // Так не может или не должно быть: буфер очищается при запятой, а мы
+                        // обнаружили его на кавычке: значит строка уже неточная.
+                        return None;
+                    }
+
+                    while let Some(c) = chars.next() {
+                        match c {
+                            '"' => {
+                                if let Some('"') = chars.peek() {
+                                    chars.next();
+                                    buffer.push('"');
+                                } else {
+                                    break;
+                                }
+                            }
+                            '\t' | '\n' => continue,
+                            _ => buffer.push(c),
+                        }
+                    }
+
+                    fields.push(buffer.trim().to_string());
+                    // После description больше ничего не ожидается.
+                    return Some(fields);
+                }
+
+                ',' => {
+                    fields.push(buffer.trim().to_string());
+                    buffer.clear();
+                }
+
+                _ => buffer.push(ch),
+            }
         }
 
-        Some(result.into_iter().map(|s| s.clean_quote()).collect())
+        if !buffer.trim().is_empty() {
+            fields.push(buffer.trim().to_string());
+        }
+
+        if fields.len() < 2 { None } else { Some(fields) }
     }
 
     /// Очищает строковые данные от кавычек, если есть. Возвращает без них, если найдены, или
     /// оригинальную строку, если кавычек не было.
     fn clean_quote(&self) -> String {
-        let line = self.as_ref();
+        let mut line = self.as_ref();
 
-        line.strip_prefix('"')
-            .and_then(|s| s.strip_suffix('"'))
-            .unwrap_or(line)
-            .to_string()
+        if line.starts_with('"') && line.ends_with('"') && line.len() >= 2 {
+            line = &line[1..line.len() - 1];
+        }
+
+        line.replace("\"\"", "\"")
     }
 }
 
