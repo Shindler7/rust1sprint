@@ -15,10 +15,10 @@ impl YPBankIO for YPBankCsvFormat {
         let mut lines = buffer.lines();
         let title_line = lines
             .next()
-            .ok_or_else(|| ParseError::parse_error("Ошибка парсинга заголовка csv", 0, 0))?;
+            .ok_or_else(|| ParseError::parse_err("Ошибка парсинга заголовка csv", 0, 0))?;
 
         if !title_line.is_eq(Self::make_title().as_str()) {
-            return Err(ParseError::parse_error(
+            return Err(ParseError::parse_err(
                 format!("Некорректный заголовок csv: {}", title_line),
                 0,
                 0,
@@ -27,7 +27,7 @@ impl YPBankIO for YPBankCsvFormat {
 
         let title_data = title_line
             .split_csv_line()
-            .ok_or_else(|| ParseError::parse_error("Ошибка разбора csv-заголовка", 0, 0))?;
+            .ok_or_else(|| ParseError::parse_err("Ошибка разбора csv-заголовка", 0, 0))?;
 
         lines
             .enumerate()
@@ -87,14 +87,14 @@ impl YPBankCsvFormat {
 
     /// Разбор отдельной строки в CSV.
     fn parse_data_line(
-        title_data: &Vec<String>,
+        title_data: &[String],
         line: &str,
         count_line: usize,
     ) -> Result<YPBankCsvFormat, ParseError> {
         let data = match line.split_csv_line() {
             Some(data) => {
                 if data.len() != title_data.len() {
-                    return Err(ParseError::parse_error(
+                    return Err(ParseError::parse_err(
                         format!("Заголовок не совпадает со строкой: {}", line),
                         count_line,
                         0,
@@ -103,7 +103,7 @@ impl YPBankCsvFormat {
                 data
             }
             None => {
-                return Err(ParseError::parse_error(
+                return Err(ParseError::parse_err(
                     "Ошибка чтения строки csv",
                     count_line,
                     0,
@@ -117,7 +117,7 @@ impl YPBankCsvFormat {
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect();
 
-        Ok(YPBankCsvFormat::new_from_map(&csv_parse)?)
+        YPBankCsvFormat::new_from_map(&csv_parse)
     }
 }
 
@@ -652,7 +652,7 @@ mod csv_tests {
     #[test]
     fn test_parse_data_line_valid() {
         // Arrange
-        let title_data = YPBankCsvFormat::fields()
+        let title_data: Vec<String> = YPBankCsvFormat::fields()
             .iter()
             .map(|s| s.to_string())
             .collect();
@@ -672,7 +672,7 @@ mod csv_tests {
     #[test]
     fn test_parse_data_line_invalid_column_count() {
         // Arrange
-        let title_data = YPBankCsvFormat::fields()
+        let title_data: Vec<String> = YPBankCsvFormat::fields()
             .iter()
             .map(|s| s.to_string())
             .collect();
@@ -688,7 +688,7 @@ mod csv_tests {
     #[test]
     fn test_parse_data_line_empty_fields() {
         // Arrange
-        let title_data = YPBankCsvFormat::fields()
+        let title_data: Vec<String> = YPBankCsvFormat::fields()
             .iter()
             .map(|s| s.to_string())
             .collect();

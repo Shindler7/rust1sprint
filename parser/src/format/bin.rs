@@ -24,7 +24,7 @@ impl YPBankBinFormat {
             }
 
             if magic_buf != MAGIC {
-                return Err(ParseError::parse_error(
+                return Err(ParseError::parse_err(
                     format!(
                         "Некорректный идентификатор Magic: {:?} (ожидается: {:?})",
                         magic_buf, MAGIC

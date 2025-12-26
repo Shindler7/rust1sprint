@@ -8,6 +8,7 @@ pub trait LineUtils {
     fn is_eq(&self, other: &str) -> bool;
     fn split_csv_line(&self) -> Option<Vec<String>>;
     fn clean_quote(&self) -> String;
+    fn escaped_quote(&self) -> String;
 }
 
 impl<T: AsRef<str>> LineUtils for T {
@@ -108,6 +109,12 @@ impl<T: AsRef<str>> LineUtils for T {
         }
 
         line.replace("\"\"", "\"")
+    }
+
+    /// Экранирование кавычек в переданной строке.
+    fn escaped_quote(&self) -> String {
+        let line = self.as_ref();
+        line.replace('"', "\"\"")
     }
 }
 

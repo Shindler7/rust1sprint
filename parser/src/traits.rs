@@ -1,7 +1,6 @@
 //! Единые трейты библиотеки для поддержки универсальности методов.
 
 use crate::errors::ParseError;
-use crate::models::YPBankTransaction;
 use std::io::{Read, Write};
 
 pub trait YPBankIO {

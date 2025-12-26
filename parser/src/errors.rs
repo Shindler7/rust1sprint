@@ -165,7 +165,7 @@ impl ParseError {
     }
 
     /// Конструктор ошибки `ParseError:ParseError`.
-    pub fn parse_error(message: impl Into<String>, line: usize, column: usize) -> Self {
+    pub fn parse_err(message: impl Into<String>, line: usize, column: usize) -> Self {
         Self::ParseError {
             message: message.into(),
             line,

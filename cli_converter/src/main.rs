@@ -1,13 +1,35 @@
 //! Консольное приложение, использующее функциональность парсеров.
 
-use cli::current_dir;
+use cli::{current_dir, cli_parse, FileFormat};
 use std::fs::File;
 
 use parser::*;
+use parser::errors::ParseError;
+use parser::models::YPBankTextFormat;
 
 mod cli;
 
+
 fn main() {
+    let convert_task = cli_parse();
+    println!("Issue has been created!")
+
+
+
+}
+
+impl FileFormat {
+    fn read_with(&self) {
+
+    }
+
+    fn write_with(&self) {
+
+    }
+}
+
+
+fn main_old() {
     let app_dir = current_dir();
     let source_dir = app_dir
         .parent()

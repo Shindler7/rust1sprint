@@ -270,7 +270,7 @@ impl Display for YPBankTextFormat {
         writeln!(f, "AMOUNT: {}", self.amount)?;
         writeln!(f, "TIMESTAMP: {}", self.timestamp)?;
         writeln!(f, "STATUS: {}", self.status)?;
-        writeln!(f, "DESCRIPTION: {}", self.description)
+        writeln!(f, "DESCRIPTION: \"{}\"", self.description)
     }
 }
 

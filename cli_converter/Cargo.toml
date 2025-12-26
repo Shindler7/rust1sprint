@@ -2,7 +2,8 @@
 name = "cli_converter"
 version = "0.1.0"
 edition = "2024"
+description = "CLI-application utilizing data parsing capabilities, including support for CSV, BIN, and TXT formats."
 
 [dependencies]
-parser = {path = "../parser"}
+parser = { path = "../parser" }
 clap = { version = "4.5.53", features = ["derive"] }
