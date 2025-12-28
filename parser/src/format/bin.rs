@@ -1,4 +1,24 @@
 //! Запись и чтение файлов бинарного формата.
+//!
+//! Предоставляет низкоуровневые методы чтения (парсинга) и записи данных. Для чтения и записи
+//! используются стандартные трейты ввода/вывода [`Read`] и [`Write`].
+//!
+//! * [`YPBankBinFormat::read_from`] — чтение (парсинг) данных в бинарном формате и распаковка в
+//!   отдельные экземпляры [`YPBankBinFormat`] каждой записи
+//! * [`YPBankBinFormat::write_to`] — запись предоставленных элементов [`YPBankBinFormat`].
+//!
+//! # Примеры
+//!
+//! ```no_run
+//! use std::fs::File;
+//! use parser::models::YPBankBinFormat;
+//!
+//! let mut file = File::open("data.bin").unwrap();
+//! let data = YPBankBinFormat::read_from(&mut file).unwrap();
+//!
+//! let mut file_target = File::open("data_target.bin").unwrap();
+//! YPBankBinFormat::write_to(&mut file_target, &data);
+//! ```
 
 use crate::errors::ParseError;
 use crate::models::YPBankBinFormat;

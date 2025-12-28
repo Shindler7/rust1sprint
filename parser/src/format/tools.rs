@@ -1,6 +1,18 @@
 //! Вспомогательные общие утилиты для обработки форматов.
 
 /// Поддерживающий трейт для работы со строками.
+///
+/// Расширяет набор методов `String` и `str` специализированными для поддержки парсеров.
+///
+/// ## Быстрый старт
+///
+/// ```plain
+/// use parser::format::tools::LineUtils;
+///
+/// let s: &str = "  Проверочная строка";
+///
+/// assert_eq!(s.is_empty_line(), true);
+/// ```
 pub trait LineUtils {
     fn is_empty_line(&self) -> bool;
     fn is_hash_marker(&self) -> bool;

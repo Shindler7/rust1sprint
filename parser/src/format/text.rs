@@ -1,4 +1,26 @@
 //! Запись и чтение файлов формата *.txt.
+//!
+//! Предоставляет низкоуровневые методы чтения (парсинга) и записи данных через трейт
+//! [`YPBankIO`]. Для чтения и записи используются стандартные трейты ввода/вывода
+//! [`std::io::Read`] и [`Write`].
+//!
+//! * [`YPBankTextFormat::read_from`] — чтение (парсинг) данных в формате CSV и распаковка в
+//!   отдельные экземпляры [`YPBankTextFormat`] каждой записи
+//! * [`YPBankTextFormat::write_to`] — запись предоставленных элементов [`YPBankTextFormat`].
+//!
+//! # Примеры
+//!
+//! ```no_run
+//! use std::fs::File;
+//! use crate::parser::traits::YPBankIO;
+//! use parser::models::YPBankTextFormat;
+//!
+//! let mut file = File::open("data.txt").unwrap();
+//! let data = YPBankTextFormat::read_from(&mut file).unwrap();
+//!
+//! let mut file_target = File::open("data_target.txt").unwrap();
+//! YPBankTextFormat::write_to(&mut file_target, &data);
+//! ```
 
 use crate::errors::ParseError;
 use crate::format::tools::LineUtils;

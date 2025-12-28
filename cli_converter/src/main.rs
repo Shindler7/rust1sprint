@@ -1,84 +1,91 @@
-//! Консольное приложение, использующее функциональность парсеров.
+//! # CLI Converter
+//!
+//! Консольное приложение для конвертации данных между форматами `CSV`, `BIN` и `TXT`,
+//! использующее возможности библиотеки [`parser`].
+//!
+//! Программа принимает входной файл, его формат, целевой формат и путь для сохранения.
+//! Поддерживаются параметры: перезапись выходного файла, проверка расширения и контроль
+//! соответствия форматов.
+//!
+//! ## Поддерживаемые форматы
+//!
+//! - `csv`: табличный текстовый формат с разделением полей запятыми;
+//! - `bin`: компактный бинарный формат (нечитаемый человеком);
+//! - `txt`: простой текстовый формат для хранения человекочитаемых записей.
+//!
+//! ## Учебный проект
+//!
+//! "Яндекс Практикум", курс *Rust для действующих разработчиков*, 2025.
+//!
+//! ## Справка
+//!
+//! Для получения списка всех параметров запуска используйте:
+//!
+//! 1. В режиме разработки (`debug`):
+//!
+//!    ```shell
+//!    cargo run -- --help
+//!    ```
+//!
+//! 2. В сборке `release` (или после установки):
+//!
+//!    ```shell
+//!    cli_converter.exe --help
+//!    ```
 
-use cli::{current_dir, cli_parse, FileFormat};
-use std::fs::File;
-
-use parser::*;
+use cli::{cli_parse, ConvertTask};
 use parser::errors::ParseError;
-use parser::models::YPBankTextFormat;
+use parser::models::YPBankTransaction;
+use std::fs::File;
+use std::process::exit;
 
 mod cli;
 
-
 fn main() {
     let convert_task = cli_parse();
-    println!("Issue has been created!")
+    println!("Issue has been created!");
 
+    convert_task.convert().unwrap_or_else(|err| {
+        eprintln!("ERROR: {}", err);
+        exit(1);
+    });
 
-
+    println!("OK! Issue has been converted!");
 }
 
-impl FileFormat {
-    fn read_with(&self) {
-
+impl ConvertTask {
+    /// Конвертировать данные из одного формата в другой.
+    ///
+    /// Структура наполняется и проверяется при формировании.
+    fn convert(&self) -> Result<(), ParseError> {
+        let read_data = self.read_with()?;
+        self.write_with(read_data)?;
+        Ok(())
     }
 
-    fn write_with(&self) {
+    /// Считать данные из исходного файла.
+    fn read_with(&self) -> Result<Vec<YPBankTransaction>, ParseError> {
+        let mut file = File::open(&self.input_file).map_err(|err| {
+            ParseError::io_error(
+                err,
+                format!("Failure to open file: {}", &self.input_file.display()),
+            )
+        })?;
 
+        self.input_format.to_parsers_fmt().to_transaction(&mut file)
     }
-}
 
+    /// Записать данные в целевой файл.
+    fn write_with(&self, data: Vec<YPBankTransaction>) -> Result<(), ParseError> {
+        let mut file = File::create(&self.output_file).map_err(|err| {
+            ParseError::io_error(
+                err,
+                format!("Failure to create file: {}", &self.output_file.display()),
+            )
+        })?;
 
-fn main_old() {
-    let app_dir = current_dir();
-    let source_dir = app_dir
-        .parent()
-        .expect("Ошибка пути: родительский каталог не получен")
-        .join(".sources");
-
-    // let records_txt = source_dir.join("records_example.txt");
-    // if !records_txt.exists() {
-    //     panic!("Необходимый файл с записями отсутствует!")
-    // }
-    // println!("{}", records_txt.to_string_lossy());
-    //
-    // // Открываем файл и читаем.
-    // let mut file = File::open(records_txt).unwrap();
-    // let data = read_text(&mut file).unwrap();
-    //
-    // println!("OK");
-    // println!("Количество записей: {}", data.len());
-    // println!("Последняя запись: {}", data.last().unwrap());
-    //
-    // // Теперь попытка опубликовать последнюю запись.
-    // let record_txt_new = source_dir.join("records_new.txt");
-    // println!("{}", record_txt_new.to_string_lossy());
-    //
-    // let mut file = File::create(record_txt_new).unwrap();
-    //
-    // let data_last = data.last().unwrap().clone();
-    //
-    // write_text(&mut file, &[data_last]).unwrap();
-    //
-    // // CSV.
-    // let records_csv = source_dir.join("records_example.csv");
-    // if !records_csv.exists() {
-    //     panic!("Необходимый файл CSV с записями отсутствует!")
-    // }
-    // let mut file_csv = File::open(records_csv).unwrap();
-    // let data = read_csv(&mut file_csv).unwrap();
-    // println!("OK CSV");
-    // println!("Количество записей CSV: {}", data.len());
-    // println!("Последняя запись: {:?}", data.last().unwrap());
-
-    // Binary
-    let records_bin = source_dir.join("records_example.bin");
-    if !records_bin.exists() {
-        panic!("Необходимый файл BIN с записями отсутствует!")
+        self.output_format
+            .to_parsers_fmt()
+            .convert_transactions(&mut file, &data)
     }
-    let mut file_bin = File::open(records_bin).unwrap();
-    let data = read_bin(&mut file_bin).unwrap();
-    println!("OK bin");
-    println!("Количество записей bin: {}", data.len());
-    println!("Последняя запись: {:?}", data.last().unwrap());
 }

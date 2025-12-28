@@ -5,18 +5,54 @@ use parser_macros::{TxDisplay, YPBankFields};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-/// Макрос преобразования структур `YPBankCsvFormat`, `YPBankTextFormat` в универсальную,
+/// Макрос преобразования структур [`YPBankCsvFormat`], [`YPBankTextFormat`] в универсальную,
 /// и предусмотрены необходимые схожие проверки.
+///
+/// ## Amount
+///
+/// Поле `amount` преобразуется из `u64` в `i64`. При этом производится проверка на
+/// переполнение, и если оно возникнет, выбросится [`ParseError::OverflowSize`].
+///
+/// Кроме того, в бинарном формате это поле со знаком (отрицательное для списаний), а в csv
+/// и txt беззнаковое. В универсальной структуре используется знаковое поле, соответственно,
+/// исходя из типа операции преобразуется и знак.
+///
+/// ## Примеры
+///
+/// ```
+/// use parser::models::{TxStatus, TxType, YPBankCsvFormat, YPBankTextFormat, YPBankTransaction};
+/// use parser::utils::get_timestamp;
+///
+/// let timestamp = get_timestamp();
+///
+/// let txt = YPBankTextFormat {
+///     tx_id: 1000000000000011,
+///     tx_type: TxType::Withdrawal,
+///     from_user_id: 9223372036854775807,
+///     to_user_id: 0,
+///     amount: 1200,
+///     timestamp,
+///     status: TxStatus::Success,
+///     description: "Record number 12".to_string()
+/// };
+///
+/// let universal = YPBankTransaction::try_from(txt).unwrap();
+/// let csv = YPBankCsvFormat::try_from(universal).unwrap();
+/// ```
 macro_rules! impl_try_from_yp_format_to_transaction {
     ($source_type:ty) => {
         impl TryFrom<$source_type> for YPBankTransaction {
             type Error = ParseError;
 
             fn try_from(source: $source_type) -> Result<Self, ParseError> {
-                let amount: i64 = source
+                let mut amount: i64 = source
                     .amount
                     .try_into()
                     .map_err(|_| ParseError::over_flow_size("u64", "i64", source.amount))?;
+
+                if matches!(source.tx_type, TxType::Transfer | TxType::Withdrawal) && amount > 0 {
+                    amount = -amount;
+                }
 
                 Ok(YPBankTransaction {
                     tx_id: source.tx_id,
@@ -33,9 +69,15 @@ macro_rules! impl_try_from_yp_format_to_transaction {
     };
 }
 
-/// Макрос преобразования структуры `YPBankTransaction` в структуры `YPBankCsvFormat`
-/// и `YPBankTextFormat`. Для бинарной структуры создан отдельный метод, потому что внутри
+/// Макрос преобразования структуры [`YPBankTransaction`] в структуры [`YPBankCsvFormat`]
+/// и [`YPBankTextFormat`]. Для бинарной структуры создан отдельный метод, потому что внутри
 /// предусматривается индивидуальная проработка с полями.
+///
+/// ## Amount
+///
+/// Знаковое поле `amount` применяется только в бинарном формате, а в csv и txt беззнаковый `u64`.
+/// Для обеспечения единообразия данных, универсальная структура применяет знаковое поле, аналогично
+/// формату `bin`. При преобразовании значение поля приводится к типу целевой структуры.
 ///
 /// Возможно для макроса ложное предупреждение `PyCharm`.
 macro_rules! impl_try_from_transaction_to_yp_format {
@@ -49,12 +91,14 @@ macro_rules! impl_try_from_transaction_to_yp_format {
                     None => "".to_string(),
                 };
 
+                let amount: u64 = value.amount.unsigned_abs();
+
                 Ok($dest_type {
                     tx_id: value.tx_id,
                     tx_type: value.tx_type,
                     from_user_id: value.from_user_id,
                     to_user_id: value.to_user_id,
-                    amount: value.amount as u64,
+                    amount,
                     timestamp: value.timestamp,
                     status: value.status,
                     description,
@@ -140,7 +184,7 @@ impl_try_from_yp_format_to_transaction!(YPBankBinFormat);
 /// 1002,TRANSFER,501,502,15000,1672534800000,FAILURE,"Payment for services, invoice #123"
 /// 1003,WITHDRAWAL,502,0,1000,1672538400000,PENDING,"ATM withdrawal"
 /// ```
-#[derive(Debug, YPBankFields, Clone)]
+#[derive(Debug, YPBankFields, PartialEq, Clone)]
 pub struct YPBankCsvFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -185,7 +229,7 @@ impl YPBankCsvFormat {
 ///
 /// Наличие значения `MAGIC` в начале каждой записи позволяет читателю повторно
 /// синхронизироваться в случае потери границы записи или повреждения данных.
-#[derive(Debug, YPBankFields, Clone)]
+#[derive(Debug, YPBankFields, PartialEq, Clone)]
 pub struct YPBankBinFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -247,7 +291,7 @@ impl TryFrom<YPBankTransaction> for YPBankBinFormat {
 /// STATUS: SUCCESS
 /// DESCRIPTION: "Terminal deposit"
 /// ```
-#[derive(Debug, YPBankFields, Clone)]
+#[derive(Debug, YPBankFields, PartialEq, Clone)]
 pub struct YPBankTextFormat {
     pub tx_id: u64,
     pub tx_type: TxType,
@@ -288,5 +332,270 @@ impl YPBankTextFormat {
             status: get_field_in_map!(fields_map, "STATUS", TxStatus),
             description: get_field_in_map!(fields_map, "DESCRIPTION", String),
         })
+    }
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use super::*;
+    use crate::models::{TxStatus, TxType};
+    use std::collections::HashMap;
+
+    // Вспомогательная функция для создания тестовой универсальной транзакции
+    fn create_test_transaction() -> YPBankTransaction {
+        YPBankTransaction {
+            tx_id: 1234567890000000,
+            tx_type: TxType::Transfer,
+            from_user_id: 1001,
+            to_user_id: 1002,
+            amount: -50000, // Отрицательная сумма для Transfer
+            timestamp: 1633046400,
+            status: TxStatus::Success,
+            description: Some("Test transaction".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_csv_to_transaction_conversion() {
+        // Arrange: создаем CSV запись с положительной суммой для Transfer
+        let csv_record = YPBankCsvFormat {
+            tx_id: 1234567890000000,
+            tx_type: TxType::Transfer,
+            from_user_id: 1001,
+            to_user_id: 1002,
+            amount: 50000, // Положительная сумма в CSV
+            timestamp: 1633046400,
+            status: TxStatus::Success,
+            description: "Test transaction".to_string(),
+        };
+
+        // Act: преобразуем CSV в универсальную транзакцию
+        let transaction: YPBankTransaction = csv_record.try_into().unwrap();
+
+        // Assert: проверяем, что сумма стала отрицательной для Transfer
+        assert_eq!(transaction.tx_id, 1234567890000000);
+        assert_eq!(transaction.tx_type, TxType::Transfer);
+        assert_eq!(transaction.amount, -50000); // Должно стать отрицательным
+        assert_eq!(
+            transaction.description,
+            Some("Test transaction".to_string())
+        );
+    }
+
+    #[test]
+    fn test_text_to_transaction_conversion() {
+        // Arrange: создаем текстовую запись с положительной суммой для Withdrawal
+        let text_record = YPBankTextFormat {
+            tx_id: 5555555550000000,
+            tx_type: TxType::Withdrawal,
+            from_user_id: 1004,
+            to_user_id: 0,
+            amount: 25000, // Положительная сумма в текстовом формате
+            timestamp: 1633046402,
+            status: TxStatus::Failure,
+            description: "Withdrawal".to_string(),
+        };
+
+        // Act: преобразуем текстовую запись в универсальную транзакцию
+        let transaction: YPBankTransaction = text_record.try_into().unwrap();
+
+        // Assert: проверяем, что сумма стала отрицательной для Withdrawal
+        assert_eq!(transaction.tx_id, 5555555550000000);
+        assert_eq!(transaction.tx_type, TxType::Withdrawal);
+        assert_eq!(transaction.amount, -25000); // Должно стать отрицательным
+        assert_eq!(transaction.description, Some("Withdrawal".to_string()));
+    }
+
+    #[test]
+    fn test_binary_to_transaction_conversion() {
+        // Arrange: создаем бинарную запись
+        let bin_record = YPBankBinFormat {
+            tx_id: 9876543210000000,
+            tx_type: TxType::Deposit,
+            from_user_id: 0,
+            to_user_id: 1003,
+            amount: 100000, // Уже может быть отрицательной в бинарном формате
+            timestamp: 1633046401,
+            status: TxStatus::Pending,
+            desc_len: 0,
+            description: None,
+        };
+
+        // Act: преобразуем бинарную запись в универсальную транзакцию
+        let transaction: YPBankTransaction = bin_record.try_into().unwrap();
+
+        // Assert: проверяем, что сумма осталась положительной для Deposit
+        assert_eq!(transaction.tx_id, 9876543210000000);
+        assert_eq!(transaction.tx_type, TxType::Deposit);
+        assert_eq!(transaction.amount, 100000); // Должно остаться положительным для Deposit
+        assert_eq!(transaction.description, None);
+    }
+
+    #[test]
+    fn test_transaction_to_csv_conversion() {
+        // Arrange: создаем универсальную транзакцию
+        let transaction = create_test_transaction();
+
+        // Act: преобразуем универсальную транзакцию в CSV формат
+        let csv_record: YPBankCsvFormat = transaction.try_into().unwrap();
+
+        // Assert: проверяем преобразование
+        assert_eq!(csv_record.tx_id, 1234567890000000);
+        assert_eq!(csv_record.tx_type, TxType::Transfer);
+        assert_eq!(csv_record.from_user_id, 1001);
+        assert_eq!(csv_record.to_user_id, 1002);
+        assert_eq!(csv_record.amount, 50000); // Абсолютное значение
+        assert_eq!(csv_record.timestamp, 1633046400);
+        assert_eq!(csv_record.status, TxStatus::Success);
+        assert_eq!(csv_record.description, "Test transaction".to_string());
+    }
+
+    #[test]
+    fn test_transaction_to_binary_conversion() {
+        // Arrange: создаем универсальную транзакцию с пустым описанием
+        let transaction = YPBankTransaction {
+            tx_id: 9876543210000000,
+            tx_type: TxType::Deposit,
+            from_user_id: 0,
+            to_user_id: 1003,
+            amount: 100000,
+            timestamp: 1633046401,
+            status: TxStatus::Pending,
+            description: None,
+        };
+
+        // Act: преобразуем универсальную транзакцию в бинарный формат
+        let bin_record: YPBankBinFormat = transaction.try_into().unwrap();
+
+        // Assert: проверяем преобразование
+        assert_eq!(bin_record.tx_id, 9876543210000000);
+        assert_eq!(bin_record.tx_type, TxType::Deposit);
+        assert_eq!(bin_record.from_user_id, 0);
+        assert_eq!(bin_record.to_user_id, 1003);
+        assert_eq!(bin_record.amount, 100000);
+        assert_eq!(bin_record.timestamp, 1633046401);
+        assert_eq!(bin_record.status, TxStatus::Pending);
+        assert_eq!(bin_record.desc_len, 0);
+        assert_eq!(bin_record.description, None);
+    }
+
+    #[test]
+    fn test_deposit_amount_remains_positive() {
+        // Arrange: создаем CSV запись для Deposit
+        let csv_record = YPBankCsvFormat {
+            tx_id: 1111111110000000,
+            tx_type: TxType::Deposit,
+            from_user_id: 0,
+            to_user_id: 1005,
+            amount: 75000, // Положительная сумма
+            timestamp: 1633046403,
+            status: TxStatus::Success,
+            description: "Deposit".to_string(),
+        };
+
+        // Act: преобразуем в универсальную транзакцию
+        let transaction: YPBankTransaction = csv_record.try_into().unwrap();
+
+        // Assert: для Deposit сумма должна остаться положительной
+        assert_eq!(transaction.tx_type, TxType::Deposit);
+        assert_eq!(transaction.amount, 75000); // Положительная
+        assert_eq!(transaction.description, Some("Deposit".to_string()));
+    }
+
+    #[test]
+    fn test_conversion_roundtrip_csv() {
+        // Arrange: создаем исходную CSV запись
+        let original_csv = YPBankCsvFormat {
+            tx_id: 1234567890000000,
+            tx_type: TxType::Transfer,
+            from_user_id: 1001,
+            to_user_id: 1002,
+            amount: 50000,
+            timestamp: 1633046400,
+            status: TxStatus::Success,
+            description: "Test transaction".to_string(),
+        };
+
+        // Act: CSV -> Transaction -> CSV
+        let transaction: YPBankTransaction = original_csv.clone().try_into().unwrap();
+        let roundtrip_csv: YPBankCsvFormat = transaction.try_into().unwrap();
+
+        // Assert: проверяем, что после roundtrip получили ту же самую запись
+        assert_eq!(original_csv.tx_id, roundtrip_csv.tx_id);
+        assert_eq!(original_csv.tx_type, roundtrip_csv.tx_type);
+        assert_eq!(original_csv.from_user_id, roundtrip_csv.from_user_id);
+        assert_eq!(original_csv.to_user_id, roundtrip_csv.to_user_id);
+        assert_eq!(original_csv.amount, roundtrip_csv.amount);
+        assert_eq!(original_csv.timestamp, roundtrip_csv.timestamp);
+        assert_eq!(original_csv.status, roundtrip_csv.status);
+        assert_eq!(original_csv.description, roundtrip_csv.description);
+    }
+
+    #[test]
+    fn test_conversion_with_empty_description() {
+        // Arrange: создаем CSV запись с пустым описанием
+        let csv_record = YPBankCsvFormat {
+            tx_id: 2222222220000000,
+            tx_type: TxType::Deposit,
+            from_user_id: 0,
+            to_user_id: 1006,
+            amount: 1000,
+            timestamp: 1633046404,
+            status: TxStatus::Pending,
+            description: "".to_string(), // Пустое описание
+        };
+
+        // Act: преобразуем в универсальную транзакцию
+        let transaction: YPBankTransaction = csv_record.try_into().unwrap();
+
+        // Assert: проверяем преобразование пустого описания
+        assert_eq!(transaction.tx_id, 2222222220000000);
+        assert_eq!(transaction.description, Some("".to_string())); // Some с пустой строкой
+    }
+
+    #[test]
+    fn test_new_from_map_for_text_format() {
+        // Arrange: создаем HashMap с данными
+        let mut fields = HashMap::new();
+        fields.insert("TX_ID".to_string(), "1234567890000000".to_string());
+        fields.insert("TX_TYPE".to_string(), "TRANSFER".to_string());
+        fields.insert("FROM_USER_ID".to_string(), "1001".to_string());
+        fields.insert("TO_USER_ID".to_string(), "1002".to_string());
+        fields.insert("AMOUNT".to_string(), "50000".to_string());
+        fields.insert("TIMESTAMP".to_string(), "1633046400".to_string());
+        fields.insert("STATUS".to_string(), "SUCCESS".to_string());
+        fields.insert("DESCRIPTION".to_string(), "Test transaction".to_string());
+
+        // Act: создаем текстовую запись из HashMap
+        let text_record = YPBankTextFormat::new_from_map(fields).unwrap();
+
+        // Assert: проверяем корректность создания
+        assert_eq!(text_record.tx_id, 1234567890000000);
+        assert_eq!(text_record.tx_type, TxType::Transfer);
+        assert_eq!(text_record.amount, 50000);
+        assert_eq!(text_record.description, "Test transaction".to_string());
+    }
+
+    #[test]
+    fn test_new_from_map_for_csv_format() {
+        // Arrange: создаем HashMap с данными
+        let mut fields = HashMap::new();
+        fields.insert("TX_ID".to_string(), "9876543210000000".to_string());
+        fields.insert("TX_TYPE".to_string(), "DEPOSIT".to_string());
+        fields.insert("FROM_USER_ID".to_string(), "0".to_string());
+        fields.insert("TO_USER_ID".to_string(), "1003".to_string());
+        fields.insert("AMOUNT".to_string(), "100000".to_string());
+        fields.insert("TIMESTAMP".to_string(), "1633046401".to_string());
+        fields.insert("STATUS".to_string(), "PENDING".to_string());
+        fields.insert("DESCRIPTION".to_string(), "".to_string()); // Пустое описание
+
+        // Act: создаем CSV запись из HashMap
+        let csv_record = YPBankCsvFormat::new_from_map(&fields).unwrap();
+
+        // Assert: проверяем корректность создания
+        assert_eq!(csv_record.tx_id, 9876543210000000);
+        assert_eq!(csv_record.tx_type, TxType::Deposit);
+        assert_eq!(csv_record.amount, 100000);
+        assert_eq!(csv_record.description, "".to_string()); // Пустая строка
     }
 }

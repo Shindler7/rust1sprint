@@ -2,6 +2,8 @@
 name = "cli_comparer"
 version = "0.1.0"
 edition = "2024"
+description = "Compares structured data in CSV, BIN, and TXT formats using the Parser library."
 
 [dependencies]
 parser = {path = "../parser"}
+clap = { version = "4.5.53", features = ["derive"] }

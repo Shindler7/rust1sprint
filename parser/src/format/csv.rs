@@ -1,4 +1,26 @@
 //! Запись и чтение файлов формата *.csv.
+//!
+//! Предоставляет низкоуровневые методы чтения (парсинга) и записи данных через трейт
+//! [`YPBankIO`]. Для чтения и записи используются стандартные трейты ввода/вывода
+//! [`std::io::Read`] и [`Write`].
+//!
+//! * [`YPBankCsvFormat::read_from`] — чтение (парсинг) данных в формате CSV и распаковка в
+//!   отдельные экземпляры [`YPBankCsvFormat`] каждой записи
+//! * [`YPBankCsvFormat::write_to`] — запись предоставленных элементов [`YPBankCsvFormat`].
+//!
+//! # Примеры
+//!
+//! ```no_run
+//! use std::fs::File;
+//! use crate::parser::traits::YPBankIO;
+//! use parser::models::YPBankCsvFormat;
+//!
+//! let mut file = File::open("data.csv").unwrap();
+//! let data = YPBankCsvFormat::read_from(&mut file).unwrap();
+//!
+//! let mut file_target = File::open("data_target.csv").unwrap();
+//! YPBankCsvFormat::write_to(&mut file_target, &data);
+//! ```
 
 use crate::errors::ParseError;
 use crate::format::tools::LineUtils;
