@@ -20,10 +20,12 @@
 //! YPBankBinFormat::write_to(&mut file_target, &data);
 //! ```
 
+use crate::MAX_SIZE_BIN_BYTES;
 use crate::errors::ParseError;
+use crate::format::tools::validate_exceed_max_bytes;
 use crate::models::YPBankBinFormat;
 use crate::models::{TxStatus, TxType};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{BufReader, BufWriter, ErrorKind, Read, Write};
 
 const MAGIC_SIZE: usize = 4;
 const MAGIC: [u8; 4] = [0x59, 0x50, 0x42, 0x4E];
@@ -32,10 +34,12 @@ impl YPBankBinFormat {
     /// Чтение данных в бинарном формате.
     pub fn read_from<R: Read>(reader: &mut R) -> Result<Vec<Self>, ParseError> {
         let mut records: Vec<Self> = Vec::new();
+        let mut buf_reader = BufReader::new(reader);
+        let mut total_read_bytes: usize = 0;
 
         let mut magic_buf = [0u8; MAGIC_SIZE];
         loop {
-            match reader.read_exact(&mut magic_buf) {
+            match buf_reader.read_exact(&mut magic_buf) {
                 Ok(_) => {}
                 Err(ref e) if e.kind() == ErrorKind::UnexpectedEof => {
                     break;
@@ -54,22 +58,37 @@ impl YPBankBinFormat {
                 ));
             }
 
-            let record = Self::read_executor(reader)?;
-            records.push(record);
+            let record = Self::read_executor(&mut buf_reader, total_read_bytes)?;
+            records.push(record.0);
+            total_read_bytes += record.1;
         }
 
         Ok(records)
     }
 
     /// Читает одну запись из потока.
-    fn read_executor<R: Read>(reader: &mut R) -> Result<Self, ParseError> {
+    ///
+    /// Возвращает экземпляр записи в структуре [`YPBankBinFormat`] и число
+    /// считанных байт из входного потока.
+    fn read_executor<R: Read>(
+        reader: &mut R,
+        total_read_bytes: usize,
+    ) -> Result<(Self, usize), ParseError> {
         let record_size = Self::read_u32be(reader)?;
-        let mut body = vec![0u8; record_size as usize];
+        let record_size = record_size as usize;
+
+        let current_bytes = total_read_bytes
+            .checked_add(4 + record_size)
+            .ok_or_else(|| ParseError::parse_err("Превышен размер записи", 0, 0))?;
+
+        validate_exceed_max_bytes(current_bytes, MAX_SIZE_BIN_BYTES)?;
+
+        let mut body = vec![0u8; record_size];
         reader.read_exact(&mut body)?;
         let mut cursor = &body[..];
         let record = Self::new_from_cursor(&mut cursor)?;
 
-        Ok(record)
+        Ok((record, current_bytes))
     }
 
     /// Запись данных в бинарном формате.
@@ -112,17 +131,21 @@ impl YPBankBinFormat {
                 Some(desc) => desc.as_bytes(),
                 None => &[],
             };
-            let desc_len = desc_bytes.len() as u32;
+
+            let desc_len = u32::try_from(desc_bytes.len())
+                .map_err(|_| ParseError::over_flow_size("usize", "u32", desc_bytes.len()))?;
 
             body.extend(desc_len.to_be_bytes());
             body.extend(desc_bytes);
 
+            let mut buf_writer = BufWriter::new(&mut writer);
+
             // MAGIC & RECORD_SIZE
-            writer.write_all(&MAGIC)?;
-            writer.write_all(&(body.len() as u32).to_be_bytes())?;
+            buf_writer.write_all(&MAGIC)?;
+            buf_writer.write_all(&(body.len() as u32).to_be_bytes())?;
 
             // Записать всё накопленное.
-            writer.write_all(&body)?;
+            buf_writer.write_all(&body)?;
         }
 
         Ok(())
@@ -204,6 +227,7 @@ mod tests {
     use super::*;
     use crate::models::{TxStatus, TxType};
     use std::io::Cursor;
+    use std::slice::from_ref;
 
     fn create_test_record(description: Option<&str>) -> YPBankBinFormat {
         YPBankBinFormat {
@@ -217,6 +241,11 @@ mod tests {
             desc_len: description.map(|s| s.len() as u32).unwrap_or(0),
             description: description.map(|s| s.to_string()),
         }
+    }
+
+    fn create_test_large_record(size_description: usize) -> YPBankBinFormat {
+        let large_description = "A".repeat(size_description);
+        create_test_record(Some(&large_description))
     }
 
     fn create_deposit_record() -> YPBankBinFormat {
@@ -254,7 +283,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[record.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&record)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -269,6 +298,25 @@ mod tests {
         assert_eq!(read_record.timestamp, record.timestamp);
         assert_eq!(read_record.status, record.status);
         assert_eq!(read_record.description, record.description);
+    }
+
+    /// Проверка ошибки при превышении лимита входных данных.
+    #[test]
+    fn test_read_large_record() {
+        let large_record = create_test_large_record(MAX_SIZE_BIN_BYTES);
+        let record = vec![large_record];
+
+        let mut buffer = Vec::new();
+
+        let write_result = YPBankBinFormat::write_to(&mut buffer, &record);
+        assert!(write_result.is_ok());
+
+        let mut cursor = Cursor::new(buffer);
+        let read_result = YPBankBinFormat::read_from(&mut cursor);
+        assert!(
+            read_result.is_err(),
+            "read_from должен вызвать ошибку при превышении лимита"
+        );
     }
 
     #[test]
@@ -303,7 +351,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[record.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&record)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -324,7 +372,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[record.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&record)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -461,7 +509,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[deposit.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&deposit)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -479,7 +527,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[withdrawal.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&withdrawal)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -500,7 +548,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[record.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&record)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -585,7 +633,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[record.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&record)).unwrap();
         let mut cursor = Cursor::new(buffer);
         let result = YPBankBinFormat::read_from(&mut cursor).unwrap();
 
@@ -624,7 +672,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[deposit.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&deposit)).unwrap();
 
         // Проверяем, что в записанных данных from_user = 0
         // Пропускаем magic (4) и record_size (4) = 8 байт
@@ -648,7 +696,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[withdrawal.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&withdrawal)).unwrap();
 
         // Проверяем, что в записанных данных to_user = 0
         // Пропускаем: magic(4) + record_size(4) + tx_id(8) + tx_type(1) + from_user(8) = 25 байт
@@ -672,7 +720,7 @@ mod tests {
 
         // Act
         let mut buffer = Vec::new();
-        YPBankBinFormat::write_to(&mut buffer, &[transfer.clone()]).unwrap();
+        YPBankBinFormat::write_to(&mut buffer, from_ref(&transfer)).unwrap();
 
         // Проверяем from_user
         let from_user_bytes = &buffer[17..25];

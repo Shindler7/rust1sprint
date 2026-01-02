@@ -10,7 +10,7 @@
 //! ## Поддерживаемые форматы
 //!
 //! - `csv`: табличный текстовый формат с разделением полей запятыми;
-//! - `bin`: компактный бинарный формат (нечитаемый человеком);
+//! - `bin`: компактный бинарный формат (человеко-нечитаемый);
 //! - `txt`: простой текстовый формат для хранения человекочитаемых записей.
 //!
 //! ## Учебный проект
@@ -32,8 +32,9 @@
 //!    ```shell
 //!    cli_converter.exe --help
 //!    ```
+#![warn(missing_docs)]
 
-use cli::{cli_parse, ConvertTask};
+use cli::{ConvertTask, cli_parse};
 use parser::errors::ParseError;
 use parser::models::YPBankTransaction;
 use std::fs::File;

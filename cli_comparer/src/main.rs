@@ -33,7 +33,9 @@
 //!    cli_comparer.exe --help
 //!    ```
 
-use crate::cli::{cli_parse, ComparerTask};
+#![warn(missing_docs)]
+
+use crate::cli::{ComparerTask, cli_parse};
 use crate::tools::open_file;
 use parser::errors::ParseError;
 use parser::models::YPBankTransaction;

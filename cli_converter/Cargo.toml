@@ -1,9 +1,11 @@
 [package]
 name = "cli_converter"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+repository = "https://github.com/Shindler7/rust1sprint"
+rust-version = "1.85.0"
 description = "CLI-application utilizing data parsing capabilities, including support for CSV, BIN, and TXT formats."
 
 [dependencies]
 parser = { path = "../parser" }
-clap = { version = "4.5.53", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }

@@ -103,7 +103,7 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 
 [[package]]
 name = "cli_comparer"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "parser",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "cli_converter"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "parser",
@@ -149,7 +149,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "parser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "parser_macros",
  "regex",

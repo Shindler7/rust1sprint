@@ -1,5 +1,7 @@
 //! Вспомогательные общие утилиты для обработки форматов.
 
+use crate::errors::ParseError;
+
 /// Поддерживающий трейт для работы со строками.
 ///
 /// Расширяет набор методов `String` и `str` специализированными для поддержки парсеров.
@@ -130,20 +132,11 @@ impl<T: AsRef<str>> LineUtils for T {
     }
 }
 
-#[macro_export]
-macro_rules! parse_field {
-        ($key:literal, $type:ty) => {
-
-
-            fields
-                .get($key)
-                .ok_or_else(|| ParseError::parse_error(concat!("Отсутствует поле: ", $key), 0, 0))
-                .and_then(|v| v.parse::<$type>().map_err(|_| {
-                    ParseError::parse_error(
-                        &format!("Невозможно распарсить поле `{}`: {:?}", $key, v),
-                        0,
-                        0,
-                    )
-                }))?
-        };
+/// Проверяет, что `bytes` в пределах `max_bytes`. При превышении возвращает
+/// ошибку [`ParseError::SizeLimitExceeded`].
+pub fn validate_exceed_max_bytes(bytes: usize, max_bytes: usize) -> Result<(), ParseError> {
+    match bytes > max_bytes {
+        true => Err(ParseError::lim_exceed(bytes, max_bytes)),
+        false => Ok(()),
     }
+}

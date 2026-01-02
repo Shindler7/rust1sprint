@@ -28,7 +28,7 @@ use crate::models::YPBankTextFormat;
 use crate::traits::YPBankIO;
 use regex::Regex;
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 
 impl YPBankIO for YPBankTextFormat {
     /// Парсинг (чтение) данных в формате `txt`.
@@ -83,9 +83,10 @@ impl YPBankIO for YPBankTextFormat {
     }
 
     /// Добавить записи на основе предоставленного экземпляра `YPBankTextFormat`.
-    fn write_to<W: Write>(mut writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError> {
+    fn write_to<W: Write>(writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError> {
+        let mut buf_writer = BufWriter::new(writer);
         for record in records {
-            writeln!(writer, "{}", Self::makeup_records(record))?;
+            writeln!(buf_writer, "{}", Self::makeup_records(record))?;
         }
 
         Ok(())
@@ -147,7 +148,7 @@ impl YPBankTextFormat {
             }
         }
 
-        let result = YPBankTextFormat::new_from_map(fields)?;
+        let result = YPBankTextFormat::new_from_map(&fields)?;
 
         Ok(result)
     }
@@ -245,6 +246,27 @@ mod text_tests {
         }
     }
 
+    fn create_large_record(description_len: usize, tx_type: TxType) -> YPBankTextFormat {
+        let description = "W".repeat(description_len);
+
+        let (from_user_id, to_user_id) = match tx_type {
+            TxType::Deposit => (0, 2209),
+            TxType::Withdrawal => (2209, 0),
+            TxType::Transfer => (2209, 1122),
+        };
+
+        YPBankTextFormat {
+            tx_id: 9876543210000001,
+            tx_type,
+            from_user_id,
+            to_user_id,
+            amount: 10599,
+            timestamp: 1633046999,
+            status: TxStatus::Success,
+            description,
+        }
+    }
+
     fn sample_transfer_block() -> String {
         String::from(
             "# Record 7890000000 (TRANSFER)\n\
@@ -321,7 +343,7 @@ mod text_tests {
         #[test]
         fn test_parse_title_valid() {
             // Arrange
-            let valid_titles = vec![
+            let valid_titles = [
                 "# Record 1 (DEPOSIT)",
                 "# Record 123 (TRANSFER)",
                 "# Record 999999999 (WITHDRAWAL)",
@@ -725,6 +747,8 @@ mod text_tests {
 
     mod error_handling_tests {
         use super::*;
+        use crate::MAX_SIZE_CSV_TXT_BYTES;
+        use std::io::Cursor;
 
         #[test]
         fn test_read_executor_invalid_inputs() {
@@ -764,6 +788,33 @@ mod text_tests {
                 // Assert
                 assert!(result.is_err(), "Should fail for case: {}", case_name);
             }
+        }
+
+        /// Проверка корректности срабатывания ограничения на большие входные
+        /// данные.
+        #[test]
+        fn test_read_large_reader() {
+            let rec_size = MAX_SIZE_CSV_TXT_BYTES / 3;
+            let records = vec![
+                create_large_record(rec_size, TxType::Deposit),
+                create_large_record(rec_size, TxType::Withdrawal),
+                create_large_record(rec_size, TxType::Transfer),
+            ];
+
+            let mut buffer = Vec::new();
+            let write_result = YPBankTextFormat::write_to(&mut buffer, &records);
+            assert!(
+                write_result.is_ok(),
+                "Запись больших данных не должна вызывать ошибку"
+            );
+
+            let mut cursor = Cursor::new(buffer);
+
+            let read_result = YPBankTextFormat::read_from(&mut cursor);
+            assert!(
+                read_result.is_err(),
+                "Должна возникать ошибка превышения лимита данных"
+            );
         }
 
         #[test]
@@ -931,13 +982,13 @@ mod text_tests {
         }
     }
 
-    // ==================== Roundtrip Tests ====================
+    // ==================== Round trip Tests ====================
 
-    mod roundtrip_tests {
+    mod round_trip_tests {
         use super::*;
 
         #[test]
-        fn test_write_read_roundtrip_basic() {
+        fn test_write_read_round_trip_basic() {
             // Arrange
             let records = vec![
                 create_test_text_record(),
@@ -963,7 +1014,7 @@ mod text_tests {
         }
 
         #[test]
-        fn test_write_read_roundtrip_special_characters() {
+        fn test_write_read_round_trip_special_characters() {
             // Arrange
             let test_cases = vec![
                 "Test \"quoted\" description",

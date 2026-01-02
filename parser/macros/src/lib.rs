@@ -75,8 +75,12 @@ pub fn derive_tx_display(input: TokenStream) -> TokenStream {
     // Сборка комплекта.
     let expanded = quote! {
         impl #name {
+            /// Предоставить id-поля перечисления для экземпляра.
+            ///
+            /// ID формируется автоматически при помощи `repr`.
             pub const fn as_u8(self) -> u8 {self as u8}
 
+            /// Предоставить экземпляр перечисления на основе id.
             pub const fn from_u8(value: u8) -> Option<Self> {
                 match value {
                     #(#match_arms)*
@@ -162,7 +166,7 @@ pub fn derive_ypbank_fields(input: TokenStream) -> TokenStream {
             ///
             /// ```no_run
             /// use parser::models::YPBankCsvFormat;
-            /// 
+            ///
             /// assert!(YPBankCsvFormat::has_field_from_str("id"));
             /// assert!(YPBankCsvFormat::has_field_from_str("ID"));
             /// assert!(!YPBankCsvFormat::has_field_from_str("not_a_field"));

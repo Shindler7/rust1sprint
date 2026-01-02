@@ -1,8 +1,12 @@
 [package]
 name = "parser"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
+rust-version = "1.85.0"
+repository = "https://github.com/Shindler7/rust1sprint"
+description = """A library for parsing and serializing data formats
+using standard library abstractions for flexible and idiomatic code."""
 
 [dependencies]
 parser_macros = { path = "macros" }
-regex = "1.12.2"
+regex = "1"

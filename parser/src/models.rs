@@ -108,7 +108,8 @@ macro_rules! impl_try_from_transaction_to_yp_format {
     };
 }
 
-/// Макрос поддержки формирования структур из текстовых значений.
+/// Преобразование данных из [`HashMap`] в поле структуры, с обработкой
+/// возможных ошибок.
 macro_rules! get_field_in_map {
     ($map:expr, $key:expr, $ty:ty) => {
         $map.get($key)
@@ -122,20 +123,27 @@ macro_rules! get_field_in_map {
     };
 }
 
-/// Тип транзакции.
+/// Перечисление возможных типов транзакций.
 #[repr(u8)]
 #[derive(Debug, TxDisplay, Clone, PartialEq)]
 pub enum TxType {
+    /// Пополнение счёта (внесение на депозит).
     Deposit = 0,
+    /// Перевод средств.
     Transfer = 1,
+    /// Списание (вывод) средств.
     Withdrawal = 2,
 }
 
+/// Перечисление возможных типов финансовых операций.
 #[repr(u8)]
 #[derive(Debug, TxDisplay, Clone, PartialEq)]
 pub enum TxStatus {
+    /// Успешная транзакция.
     Success = 0,
+    /// Транзакция неудачная.
     Failure = 1,
+    /// Транзакция в процессе проведения (рассмотрения).
     Pending = 2,
 }
 
@@ -143,13 +151,29 @@ pub enum TxStatus {
 /// исходные сведения, а также при извлечении их из хранения.
 #[derive(Debug, Clone, PartialEq, YPBankFields)]
 pub struct YPBankTransaction {
+    /// ID операции.
     pub tx_id: u64,
+
+    /// Тип операции, определяется из вариантов, предусмотренных [`TxType`].
     pub tx_type: TxType,
+
+    /// ID отправителя средств.
     pub from_user_id: u64,
+
+    /// ID получателя средств.
     pub to_user_id: u64,
+
+    /// Сумма пополнения. Положительная для зачислений, отрицательная для
+    /// списаний. Определяется по полю `tx_type`.
     pub amount: i64,
+
+    /// Время операции (в секундах от начала эпохи UNIX).
     pub timestamp: u64,
+
+    /// Статус операции. Значения предусмотрены перечислением [`TxStatus`].
     pub status: TxStatus,
+
+    /// Описание операции, если предоставлено.
     pub description: Option<String>,
 }
 
@@ -186,19 +210,39 @@ impl_try_from_yp_format_to_transaction!(YPBankBinFormat);
 /// ```
 #[derive(Debug, YPBankFields, PartialEq, Clone)]
 pub struct YPBankCsvFormat {
+    /// ID операции.
     pub tx_id: u64,
+
+    /// Тип операции, определяется из вариантов, предусмотренных [`TxType`].
     pub tx_type: TxType,
+
+    /// ID отправителя средств.
     pub from_user_id: u64,
+
+    /// ID получателя средств.
     pub to_user_id: u64,
+
+    /// Сумма пополнения. Беззнаковая. Операция определяется по полю `tx_type`.
     pub amount: u64,
+
+    /// Время операции (в секундах от начала эпохи UNIX).
     pub timestamp: u64,
+
+    /// Статус операции. Значения предусмотрены перечислением [`TxStatus`].
     pub status: TxStatus,
+
+    /// Описание операции.
     pub description: String,
 }
 
 impl_try_from_transaction_to_yp_format!(YPBankCsvFormat);
 
 impl YPBankCsvFormat {
+    /// Создаёт экземпляр структуры на основе данных из `HashMap`.
+    ///
+    /// Структура `fields`:
+    /// * ключ — строковое представление имени поля структуры
+    /// * значение — значение поля
     pub fn new_from_map(fields: &HashMap<String, String>) -> Result<Self, ParseError> {
         Ok(Self {
             tx_id: get_field_in_map!(fields, "TX_ID", u64),
@@ -231,16 +275,33 @@ impl YPBankCsvFormat {
 /// синхронизироваться в случае потери границы записи или повреждения данных.
 #[derive(Debug, YPBankFields, PartialEq, Clone)]
 pub struct YPBankBinFormat {
+    /// ID операции.
     pub tx_id: u64,
+
+    /// Тип операции, определяется из вариантов, предусмотренных [`TxType`].
     pub tx_type: TxType,
+
+    /// ID отправителя средств.
     pub from_user_id: u64,
+
+    /// ID получателя средств.
     pub to_user_id: u64,
+
+    /// Сумма пополнения. Положительная для зачислений, отрицательная для
+    /// списаний.
     pub amount: i64,
+
+    /// Время операции (в секундах от начала эпохи UNIX).
     pub timestamp: u64,
+
+    /// Статус операции. Значения предусмотрены перечислением [`TxStatus`].
     pub status: TxStatus,
+
     /// Длина следующего описания `description` в кодировке UTF-8.
     pub desc_len: u32,
-    /// Необязательное текстовое описание. Если описание отсутствует, `DESC_LEN` равен `0`.
+
+    /// Необязательное текстовое описание. Если описание отсутствует,
+    /// `DESC_LEN` равен `0`.
     pub description: Option<String>,
 }
 
@@ -293,13 +354,28 @@ impl TryFrom<YPBankTransaction> for YPBankBinFormat {
 /// ```
 #[derive(Debug, YPBankFields, PartialEq, Clone)]
 pub struct YPBankTextFormat {
+    /// ID операции.
     pub tx_id: u64,
+
+    /// Тип операции, определяется из вариантов, предусмотренных [`TxType`].
     pub tx_type: TxType,
+
+    /// ID отправителя средств.
     pub from_user_id: u64,
+
+    /// ID получателя средств.
     pub to_user_id: u64,
+
+    /// Сумма пополнения. Беззнаковая. Операция определяется по полю `tx_type`.
     pub amount: u64,
+
+    /// Время операции (в секундах от начала эпохи UNIX).
     pub timestamp: u64,
+
+    /// Статус операции. Значения предусмотрены перечислением [`TxStatus`].
     pub status: TxStatus,
+
+    /// Описание операции.
     pub description: String,
 }
 
@@ -321,7 +397,7 @@ impl Display for YPBankTextFormat {
 impl YPBankTextFormat {
     /// Создаёт экземпляр структуры на основе данных из `HashMap`, где ключ и значение,
     /// соответственно, равны этим параметрам полей структуры.
-    pub fn new_from_map(fields_map: HashMap<String, String>) -> Result<Self, ParseError> {
+    pub fn new_from_map(fields_map: &HashMap<String, String>) -> Result<Self, ParseError> {
         Ok(Self {
             tx_id: get_field_in_map!(fields_map, "TX_ID", u64),
             tx_type: get_field_in_map!(fields_map, "TX_TYPE", TxType),
@@ -503,7 +579,7 @@ mod conversion_tests {
     }
 
     #[test]
-    fn test_conversion_roundtrip_csv() {
+    fn test_conversion_round_trip_csv() {
         // Arrange: создаем исходную CSV запись
         let original_csv = YPBankCsvFormat {
             tx_id: 1234567890000000,
@@ -518,17 +594,17 @@ mod conversion_tests {
 
         // Act: CSV -> Transaction -> CSV
         let transaction: YPBankTransaction = original_csv.clone().try_into().unwrap();
-        let roundtrip_csv: YPBankCsvFormat = transaction.try_into().unwrap();
+        let round_trip_csv: YPBankCsvFormat = transaction.try_into().unwrap();
 
-        // Assert: проверяем, что после roundtrip получили ту же самую запись
-        assert_eq!(original_csv.tx_id, roundtrip_csv.tx_id);
-        assert_eq!(original_csv.tx_type, roundtrip_csv.tx_type);
-        assert_eq!(original_csv.from_user_id, roundtrip_csv.from_user_id);
-        assert_eq!(original_csv.to_user_id, roundtrip_csv.to_user_id);
-        assert_eq!(original_csv.amount, roundtrip_csv.amount);
-        assert_eq!(original_csv.timestamp, roundtrip_csv.timestamp);
-        assert_eq!(original_csv.status, roundtrip_csv.status);
-        assert_eq!(original_csv.description, roundtrip_csv.description);
+        // Assert: проверяем, что после round_trip получили ту же самую запись
+        assert_eq!(original_csv.tx_id, round_trip_csv.tx_id);
+        assert_eq!(original_csv.tx_type, round_trip_csv.tx_type);
+        assert_eq!(original_csv.from_user_id, round_trip_csv.from_user_id);
+        assert_eq!(original_csv.to_user_id, round_trip_csv.to_user_id);
+        assert_eq!(original_csv.amount, round_trip_csv.amount);
+        assert_eq!(original_csv.timestamp, round_trip_csv.timestamp);
+        assert_eq!(original_csv.status, round_trip_csv.status);
+        assert_eq!(original_csv.description, round_trip_csv.description);
     }
 
     #[test]
@@ -567,7 +643,7 @@ mod conversion_tests {
         fields.insert("DESCRIPTION".to_string(), "Test transaction".to_string());
 
         // Act: создаем текстовую запись из HashMap
-        let text_record = YPBankTextFormat::new_from_map(fields).unwrap();
+        let text_record = YPBankTextFormat::new_from_map(&fields).unwrap();
 
         // Assert: проверяем корректность создания
         assert_eq!(text_record.tx_id, 1234567890000000);

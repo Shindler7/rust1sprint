@@ -27,7 +27,7 @@ use crate::format::tools::LineUtils;
 use crate::models::YPBankCsvFormat;
 use crate::traits::YPBankIO;
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 
 impl YPBankIO for YPBankCsvFormat {
     type DataFormat = YPBankCsvFormat;
@@ -58,10 +58,11 @@ impl YPBankIO for YPBankCsvFormat {
     }
 
     /// Добавить запись на основе предоставленного экземпляра `YPBankCsvFormat`.
-    fn write_to<W: Write>(mut writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError> {
-        writeln!(writer, "{}", Self::make_title())?;
+    fn write_to<W: Write>(writer: W, records: &[Self::DataFormat]) -> Result<(), ParseError> {
+        let mut buf_writer = BufWriter::new(writer);
+        writeln!(buf_writer, "{}", Self::make_title())?;
         for record in records {
-            writeln!(writer, "{}", Self::makeup_records(record))?;
+            writeln!(buf_writer, "{}", Self::makeup_records(record))?;
         }
 
         Ok(())
@@ -145,9 +146,11 @@ impl YPBankCsvFormat {
 
 #[cfg(test)]
 mod csv_tests {
+    use crate::MAX_SIZE_CSV_TXT_BYTES;
     use crate::errors::ParseError;
     use crate::models::{TxStatus, TxType, YPBankCsvFormat};
     use crate::traits::YPBankIO;
+    use std::io::Cursor;
 
     fn create_test_csv_record() -> YPBankCsvFormat {
         YPBankCsvFormat {
@@ -185,6 +188,27 @@ mod csv_tests {
             timestamp: 1633046402,
             status: TxStatus::Failure,
             description: "Withdrawal".to_string(),
+        }
+    }
+
+    fn create_large_record(description_len: usize, tx_type: TxType) -> YPBankCsvFormat {
+        let description = "W".repeat(description_len);
+
+        let (from_user_id, to_user_id) = match tx_type {
+            TxType::Deposit => (0, 220915),
+            TxType::Withdrawal => (220915, 0),
+            TxType::Transfer => (220915, 11221991),
+        };
+
+        YPBankCsvFormat {
+            tx_id: 9876543210000001,
+            tx_type,
+            from_user_id,
+            to_user_id,
+            amount: 10599,
+            timestamp: 1633046999,
+            status: TxStatus::Success,
+            description,
         }
     }
 
@@ -287,6 +311,33 @@ mod csv_tests {
         assert_eq!(result[2].tx_type, TxType::Withdrawal);
         assert_eq!(result[2].status, TxStatus::Failure);
         assert_eq!(result[2].description, "Withdrawal");
+    }
+
+    /// Проверка корректности срабатывания ограничения на большие входные
+    /// данные.
+    #[test]
+    fn test_read_large_reader() {
+        let rec_size = MAX_SIZE_CSV_TXT_BYTES / 3;
+        let records = vec![
+            create_large_record(rec_size, TxType::Deposit),
+            create_large_record(rec_size, TxType::Withdrawal),
+            create_large_record(rec_size, TxType::Transfer),
+        ];
+
+        let mut buffer = Vec::new();
+        let write_result = YPBankCsvFormat::write_to(&mut buffer, &records);
+        assert!(
+            write_result.is_ok(),
+            "Запись больших данных не должна вызывать ошибку"
+        );
+
+        let mut cursor = Cursor::new(buffer);
+
+        let read_result = YPBankCsvFormat::read_from(&mut cursor);
+        assert!(
+            read_result.is_err(),
+            "Должна возникать ошибка превышения лимита данных"
+        );
     }
 
     #[test]
@@ -539,7 +590,7 @@ mod csv_tests {
     }
 
     #[test]
-    fn test_write_read_roundtrip() {
+    fn test_write_read_round_trip() {
         // Arrange
         let records = vec![
             create_test_csv_record(),
@@ -572,7 +623,7 @@ mod csv_tests {
     }
 
     #[test]
-    fn test_write_read_roundtrip_special_characters() {
+    fn test_write_read_round_trip_special_characters() {
         // Arrange
         let mut record = create_test_csv_record();
         record.description = "Test \"quoted\", with comma\nand newline".to_string();
@@ -586,7 +637,7 @@ mod csv_tests {
         let read_records = YPBankCsvFormat::read_executor(csv_string);
 
         // Assert
-        assert_eq!(read_records.is_err(), true);
+        assert!(read_records.is_err());
     }
 
     #[test]

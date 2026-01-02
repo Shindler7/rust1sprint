@@ -31,6 +31,8 @@
 //!
 //! write_text(&mut stdout, &yp_txt).unwrap();
 //! ```
+#![warn(missing_docs)]
+
 #[macro_use]
 pub mod errors;
 pub mod format;
@@ -44,9 +46,18 @@ use errors::ParseError;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Write};
 
+/// Значение MiB.
+const MI_B: usize = 1_048_576;
+/// Максимальный размер входящего потока для бинарного формата.
+pub const MAX_SIZE_BIN_BYTES: usize = 8 * MI_B;
+/// Максимальный размер входящего потока для CSV и TXT.
+pub const MAX_SIZE_CSV_TXT_BYTES: usize = 4 * MI_B;
+
 /// Трейт предоставляющий дополнительные методы для векторов, содержащих структуры данных
 /// в форматах обработки файлов.
 pub trait Transaction {
+    /// Конвертировать набор структур [`YPBankCsvFormat`], [`YPBankBinFormat`],
+    /// [`YPBankTextFormat`] в универсальную [`YPBankTransaction`].
     fn convert_to_transaction(self) -> Result<Vec<YPBankTransaction>, ParseError>;
 }
 
